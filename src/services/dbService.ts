@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import * as dotenv from "dotenv";
 
 import { Logger } from "(src)/helpers/Logger";
-import { ScanRootResult } from "(src)/services/Scanner";
+import { ScanRootResult } from "(src)/helpers/FileUtils";
 import { File } from "(src)/helpers/FileUtils";
 
 dotenv.config({path: ".env"});

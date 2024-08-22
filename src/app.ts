@@ -41,10 +41,10 @@ app.get("/*", function (req, res, next) {
 	}
 });
 
-
-BooksStore.getInstance().updateBooksInfo()
-	.catch((error) => {
-		logger.error("Initializing:", error);
-	});
+try {
+	BooksStore.getInstance();
+} catch (error) {
+	logger.error("Initializing:", error);
+}
 
 export { app };
