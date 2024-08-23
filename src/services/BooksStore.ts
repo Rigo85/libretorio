@@ -530,7 +530,7 @@ export class BooksStore {
 
 		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
 		const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
-		const calibrePath = "ebook-convert";
+		const calibrePath = path.join(__dirname, "calibre", "ebook-convert");
 		const command = `${calibrePath} "${data.filePath}" "${pdfPath}"`;
 
 		return await this.convertToPdf(data, command);
