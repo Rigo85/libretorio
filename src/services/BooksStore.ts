@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { exec } from "child_process";
 import util from "util";
 import unzipper from "unzipper";
+import { v4 as uuidv4 } from "uuid";
 
 import { Logger } from "(src)/helpers/Logger";
 import {
@@ -175,7 +176,7 @@ export class BooksStore {
 				const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
 				return {pages, success: "OK"};
 			} else {
-				extractPath = path.join(__dirname, "extracted");
+				extractPath = path.join(__dirname, `extracted-${uuidv4()}`);
 				if (!fs.existsSync(extractPath)) {
 					fs.mkdirSync(extractPath);
 				}
@@ -389,7 +390,7 @@ export class BooksStore {
 				const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
 				return {pages, success: "OK"};
 			} else {
-				extractPath = path.join(__dirname, "extracted");
+				extractPath = path.join(__dirname, `extracted-${uuidv4()}`);
 				if (!fs.existsSync(extractPath)) {
 					fs.mkdirSync(extractPath);
 				}

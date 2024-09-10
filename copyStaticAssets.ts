@@ -15,6 +15,6 @@ shell.ln("-s", "/media/RIGO7/Libretorio-conf/covers", "dist/public/covers");
 shell.ln("-s", "/media/RIGO7/Libretorio-conf/cache", "dist/public/cache");
 shell.ln("-s", "/media/RIGO7/Libretorio-conf/temp_covers", "dist/public/temp_covers");
 
-const publicDir = path.join("dist/public", __dirname.slice(1), "dist/public");
+const publicDir = path.join("dist/public", `${__dirname.slice(1)}-Scanner`, "dist/public");
 shell.mkdir("-p", publicDir);
 shell.ln("-s", path.join(__dirname, "dist/public/books"), path.join(publicDir, "books"));
