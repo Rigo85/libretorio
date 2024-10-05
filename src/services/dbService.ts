@@ -315,7 +315,28 @@ export async function getFilesCount(parentHash: string): Promise<number> {
 	}
 }
 
-export async function getFilesByText(searchText: string): Promise<File[]> {
+export async function getFilesCountByText(searchText: string): Promise<number> {
+	try {
+		const query = `
+			SELECT COUNT(*) AS count 
+			FROM archive 
+			WHERE 
+				name ILIKE '%' || $1 || '%' 
+				OR ("localDetails" IS NOT NULL AND "localDetails"::text ILIKE '%' || $1 || '%')
+				OR ("webDetails" IS NOT NULL AND "webDetails"::text ILIKE '%' || $1 || '%')
+		`;
+		const values = [searchText];
+		const rows = await executeQuery(query, values);
+
+		return rows?.length ? rows[0].count : 0;
+	} catch (error) {
+		logger.error("getFilesCountByText", error.message);
+
+		return 0;
+	}
+}
+
+export async function getFilesByText(searchText: string, offset: number, limit: number): Promise<File[]> {
 	try {
 		const query = `
 			SELECT * 
@@ -323,9 +344,10 @@ export async function getFilesByText(searchText: string): Promise<File[]> {
 			WHERE 
 				name ILIKE '%' || $1 || '%' 
 				OR ("localDetails" IS NOT NULL AND "localDetails"::text ILIKE '%' || $1 || '%')
-				OR ("webDetails" IS NOT NULL AND "webDetails"::text ILIKE '%' || $1 || '%');
+				OR ("webDetails" IS NOT NULL AND "webDetails"::text ILIKE '%' || $1 || '%')
+			OFFSET $2 LIMIT $3;
 		`;
-		const values = [searchText];
+		const values = [searchText, offset, limit];
 		const rows = await executeQuery(query, values);
 
 		return rows || [];

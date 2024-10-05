@@ -77,7 +77,16 @@ async function onSearchEvent(ws: WebSocket, messageObj: { event: string; data: a
 
 async function onSearchTextEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const scanResult = await BooksStore.getInstance().searchBooksByTextOnDb(messageObj.data);
+		const offset = messageObj.data?.offset ?? 0;
+		const limit = messageObj.data?.limit ?? 50;
+		const searchText = messageObj.data?.searchText;
+
+		if (!searchText) {
+			sendMessage(ws, {event: "errors", data: {errors: ["An error has occurred. Invalid search text."]}});
+
+			return;
+		}
+		const scanResult = await BooksStore.getInstance().searchBooksByTextOnDb(searchText, offset, limit);
 		sendMessage(ws, {event: "list", data: scanResult});
 	} catch (error) {
 		logger.error("onSearchTextEvent", error);

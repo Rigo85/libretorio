@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Logger } from "(src)/helpers/Logger";
 import {
 	getFiles,
-	getFilesByText, getFilesCount,
+	getFilesByText, getFilesCount, getFilesCountByText,
 	getScanRoots,
 	updateFile
 } from "(src)/services/dbService";
@@ -64,7 +64,9 @@ export class BooksStore {
 			// const files = await getFiles(parentHash ?? directories.hash, offset, limit);
 			// const total = await getFilesCount(parentHash ?? directories.hash);
 			const [files, total] = await Promise.all([
-				getFiles(parentHash ?? directories.hash, offset, limit), getFilesCount(parentHash ?? directories.hash)]);
+				getFiles(parentHash ?? directories.hash, offset, limit),
+				getFilesCount(parentHash ?? directories.hash)]
+			);
 
 			return {directories, files, total};
 		} catch (error) {
@@ -120,8 +122,8 @@ export class BooksStore {
 		}
 	}
 
-	async searchBooksByTextOnDb(data: { searchText: string }): Promise<ScanResult> {
-		logger.info("searchBooksByTextOnDb:", data);
+	async searchBooksByTextOnDb(searchText: string, offset: number, limit: number): Promise<ScanResult> {
+		logger.info("searchBooksByTextOnDb:", {searchText, offset, limit});
 
 		try {
 			const scanRoots = await getScanRoots();
@@ -132,9 +134,12 @@ export class BooksStore {
 			}
 
 			const directories = JSON.parse(scanRoots[0].directories) as Directory;
-			const files = await getFilesByText(data.searchText);
+			const [files, total] = await Promise.all([
+				getFilesByText(searchText, offset, limit),
+				getFilesCountByText(searchText)
+			]);
 
-			return {directories, files};
+			return {directories, files, total};
 		} catch (error) {
 			logger.error("searchBooksByTextOnDb", error);
 
