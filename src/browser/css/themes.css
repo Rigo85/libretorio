@@ -1,0 +1,158 @@
+/* Incluir fuentes locales */
+@font-face {
+	font-family: 'Roboto';
+	src: url('/fonts/Roboto/Roboto-Regular.ttf') format('truetype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: 'Roboto';
+	src: url('/fonts/Roboto/Roboto-Bold.ttf') format('truetype');
+	font-weight: bold;
+	font-style: normal;
+}
+
+/* Tema claro */
+.light-theme {
+	background-color: #f0f0f0;
+	color: #333333;
+	font-family: 'Roboto', sans-serif;
+	font-size: 16px;
+	line-height: 1.6;
+}
+
+.light-theme a {
+	color: #007BFF;
+}
+
+.light-theme a:hover {
+	color: #0056b3;
+}
+
+.light-theme h1, .light-theme h2, .light-theme h3,
+.light-theme h4, .light-theme h5, .light-theme h6 {
+	color: #333333;
+	margin-top: 1.5em;
+	margin-bottom: 0.5em;
+}
+
+.light-theme p {
+	margin-bottom: 1em;
+}
+
+.light-theme blockquote {
+	border-left: 4px solid #ccc;
+	margin: 1em;
+	padding-left: 1em;
+	color: #666;
+	text-align: justify;
+}
+
+.light-theme img {
+	max-width: 100%;
+	height: auto;
+}
+
+.light-theme ul, .light-theme ol {
+	margin: 1em 0;
+	padding-left: 40px;
+}
+
+.light-theme li {
+	margin-bottom: 0.5em;
+}
+
+.light-theme table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 1em;
+}
+
+.light-theme th, .light-theme td {
+	border: 1px solid #ddd;
+	padding: 8px;
+}
+
+.light-theme th {
+	background-color: #f0f0f0;
+}
+
+.light-theme pre, .light-theme code {
+	background-color: #f0f0f0;
+	padding: 10px;
+	border-radius: 4px;
+	overflow: auto;
+}
+
+/* Tema oscuro */
+.dark-theme {
+	background-color: #202020;
+	color: #cccccc;
+	font-family: 'Roboto', sans-serif;
+	font-size: 16px;
+	line-height: 1.6;
+}
+
+.dark-theme a {
+	color: #1E90FF;
+}
+
+.dark-theme a:hover {
+	color: #4682B4;
+}
+
+.dark-theme h1, .dark-theme h2, .dark-theme h3,
+.dark-theme h4, .dark-theme h5, .dark-theme h6 {
+	color: #cccccc;
+	margin-top: 1.5em;
+	margin-bottom: 0.5em;
+}
+
+.dark-theme p {
+	margin-bottom: 1em;
+}
+
+.dark-theme blockquote {
+	border-left: 4px solid #666;
+	margin: 1em;
+	padding-left: 1em;
+	color: #999;
+	text-align: justify;
+}
+
+.dark-theme img {
+	max-width: 100%;
+	height: auto;
+}
+
+.dark-theme ul, .dark-theme ol {
+	margin: 1em 0;
+	padding-left: 40px;
+}
+
+.dark-theme li {
+	margin-bottom: 0.5em;
+}
+
+.dark-theme table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 1em;
+}
+
+.dark-theme th, .dark-theme td {
+	border: 1px solid #444;
+	padding: 8px;
+}
+
+.dark-theme th {
+	background-color: #333;
+}
+
+.dark-theme pre, .dark-theme code {
+	background-color: #333;
+	padding: 10px;
+	border-radius: 4px;
+	overflow: auto;
+}
