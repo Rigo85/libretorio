@@ -42,6 +42,10 @@ export function onMessageEvent(message: any, ws: WebSocket) {
 		"get_more_pages": async () => {
 			await onGetMorePagesEvent(ws, messageObj);
 		},
+		// eslint-disable-next-line @typescript-eslint/naming-convention
+		"get_audio_book": async () => {
+			await onGetAudioBookEvent(ws, messageObj);
+		},
 		"default": async () => {
 			ws.send("{\"event\":\"errors\", \"data\": {\"errors\":[\"An error has occurred. Invalid event kind.\"]}}");
 		}
@@ -72,6 +76,15 @@ async function onSearchEvent(ws: WebSocket, messageObj: { event: string; data: a
 		sendMessage(ws, {event: "search_details", data: bookInfo});
 	} catch (error) {
 		logger.error("onSearchEvent", error);
+	}
+}
+
+async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
+	try {
+		const audioBook = await BooksStore.getInstance().getAudioFiles(messageObj?.data?.filePath);
+		sendMessage(ws, {event: "get_audio_book", data: audioBook});
+	} catch (error) {
+		logger.error("onGetAudioBookEvent", error);
 	}
 }
 

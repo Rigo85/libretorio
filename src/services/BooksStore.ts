@@ -16,7 +16,7 @@ import {
 	getScanRoots,
 	updateFile
 } from "(src)/services/dbService";
-import { ScanResult } from "(src)/helpers/FileUtils";
+import { AudioBookMetadata, ScanResult } from "(src)/helpers/FileUtils";
 import {
 	checkIfPathExistsAndIsFile,
 	ConventToPdfUtilFunction,
@@ -639,6 +639,34 @@ export class BooksStore {
 			logger.error("getMorePages", error);
 
 			return {success: "ERROR", error: error.message || "Error getting more pages."};
+		}
+	}
+
+	public async getAudioFiles(filePath: string): Promise<AudioBookMetadata[]> {
+		// logger.info(`getAudioFiles: '${filePath}'`);
+		try {
+			const dirents = await fs.readdir(filePath, {withFileTypes: true});
+			return dirents
+				.filter(dirent => dirent.isFile())
+				.filter(dirent => /\.(mp3|wav)$/i.test(dirent.name))
+				.map(dirent => {
+					const extension = path.extname(dirent.name).toLowerCase();
+					let type: string;
+					if (extension === ".mp3") {
+						type = "audio/mpeg";
+					} else if (extension === ".wav") {
+						type = "audio/wav";
+					}
+					return {
+						title: dirent.name,
+						src: path.resolve(filePath, dirent.name),
+						type
+					};
+				});
+		} catch (error) {
+			logger.error("getAudioFiles", error);
+
+			return undefined;
 		}
 	}
 }

@@ -48,6 +48,12 @@ export interface DecompressPages {
 	index: number;
 }
 
+export interface AudioBookMetadata {
+	title: string;
+	src: string;
+	type: string;
+}
+
 export interface ScanResult {
 	directories: Directory;
 	files: File[];
