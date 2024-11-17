@@ -662,6 +662,7 @@ export class BooksStore {
 			return dirents
 				.filter(dirent => dirent.isFile())
 				.filter(dirent => validExtensions.includes(path.extname(dirent.name).toLowerCase()))
+				.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
 				.map(dirent => {
 					const extension = path.extname(dirent.name).toLowerCase();
 
