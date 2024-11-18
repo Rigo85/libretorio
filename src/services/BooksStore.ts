@@ -667,55 +667,56 @@ export class BooksStore {
 				.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
 			;
 
-			// const audioMetadataPromises = audioFiles.map(async (dirent) => {
-			// 	const extension = path.extname(dirent.name).toLowerCase();
-			// 	const filePathResolved = path.resolve(filePath, dirent.name);
-			//
-			// 	let length = 0;
-			// 	try {
-			// 		const metadata: IAudioMetadata = await mm.parseFile(filePathResolved);
-			// 		length = metadata.format.duration ?? 0;
-			// 	} catch (error) {
-			// 		logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
-			// 	}
-			//
-			// 	// logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
-			//
-			// 	return {
-			// 		title: dirent.name,
-			// 		src: filePathResolved,
-			// 		type: mapper[extension] ?? "audio/mpeg",
-			// 		length: formatTime(length)
-			// 	};
-			// });
-
-			const result = [];
-			for (const dirent of audioFiles) {
+			const audioMetadataPromises = audioFiles.map(async (dirent) => {
 				const extension = path.extname(dirent.name).toLowerCase();
 				const filePathResolved = path.resolve(filePath, dirent.name);
 
 				let length = 0;
 				try {
-					const metadata: IAudioMetadata = await mm.parseFile(
-						filePathResolved, {duration: true, skipCovers: true});
-					logger.info(JSON.stringify(metadata));
+					const metadata: IAudioMetadata = await mm.parseFile(filePathResolved);
+					logger.info(`path: "${filePathResolved}" -  metadata: ${JSON.stringify(metadata)}`);
 					length = metadata.format.duration ?? 0;
 				} catch (error) {
 					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
 				}
 
-				logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
+				// logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
 
-				result.push({
+				return {
 					title: dirent.name,
 					src: filePathResolved,
 					type: mapper[extension] ?? "audio/mpeg",
 					length: formatTime(length)
-				});
-			}
+				};
+			});
 
-			return result;
-			// return await Promise.all(audioMetadataPromises);
+			// const result = [];
+			// for (const dirent of audioFiles) {
+			// 	const extension = path.extname(dirent.name).toLowerCase();
+			// 	const filePathResolved = path.resolve(filePath, dirent.name);
+			//
+			// 	let length = 0;
+			// 	try {
+			// 		const metadata: IAudioMetadata = await mm.parseFile(
+			// 			filePathResolved, {duration: true, skipCovers: true});
+			// 		logger.info(JSON.stringify(metadata));
+			// 		length = metadata.format.duration ?? 0;
+			// 	} catch (error) {
+			// 		logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
+			// 	}
+			//
+			// 	logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
+			//
+			// 	result.push({
+			// 		title: dirent.name,
+			// 		src: filePathResolved,
+			// 		type: mapper[extension] ?? "audio/mpeg",
+			// 		length: formatTime(length)
+			// 	});
+			// }
+			//
+			// return result;
+			return await Promise.all(audioMetadataPromises);
 		} catch (error) {
 			logger.error("getAudioFiles", error);
 
