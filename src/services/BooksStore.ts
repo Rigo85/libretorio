@@ -673,7 +673,9 @@ export class BooksStore {
 
 				let length = 0;
 				try {
-					const metadata: IAudioMetadata = await mm.parseFile(filePathResolved);
+					const metadata: IAudioMetadata = await mm.parseFile(
+						filePathResolved, {duration: true, skipCovers: true})
+					;
 					logger.info(`path: "${filePathResolved}" -  metadata: ${JSON.stringify(metadata)}`);
 					length = metadata.format.duration ?? 0;
 				} catch (error) {
