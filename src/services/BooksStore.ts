@@ -679,6 +679,8 @@ export class BooksStore {
 					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
 				}
 
+				logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
+
 				return {
 					title: dirent.name,
 					src: filePathResolved,
