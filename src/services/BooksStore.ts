@@ -697,10 +697,13 @@ export class BooksStore {
 				let length = 0;
 				try {
 					const metadata: IAudioMetadata = await mm.parseFile(filePathResolved);
+					logger.info(JSON.stringify(metadata));
 					length = metadata.format.duration ?? 0;
 				} catch (error) {
 					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
 				}
+
+				logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
 
 				result.push({
 					title: dirent.name,
