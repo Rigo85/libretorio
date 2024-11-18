@@ -8,6 +8,7 @@ import { exec } from "child_process";
 import util from "util";
 import unzipper from "unzipper";
 import { v4 as uuidv4 } from "uuid";
+import { parseFile } from "music-metadata";
 
 import { Logger } from "(src)/helpers/Logger";
 import {
@@ -659,19 +660,45 @@ export class BooksStore {
 			/* eslint-enable @typescript-eslint/naming-convention */
 
 			const dirents = await fs.readdir(filePath, {withFileTypes: true});
-			return dirents
+			const audioFiles = dirents
 				.filter(dirent => dirent.isFile())
 				.filter(dirent => validExtensions.includes(path.extname(dirent.name).toLowerCase()))
 				.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
-				.map(dirent => {
-					const extension = path.extname(dirent.name).toLowerCase();
+			;
+			const audioMetadataPromises = audioFiles.map(async (dirent) => {
+				const extension = path.extname(dirent.name).toLowerCase();
+				const filePathResolved = path.resolve(filePath, dirent.name);
 
-					return {
-						title: dirent.name,
-						src: path.resolve(filePath, dirent.name),
-						type: mapper[extension] ?? "audio/mpeg"
-					};
-				});
+				let length = 0;
+				try {
+					const metadata = await parseFile(filePathResolved);
+					length = metadata.format.duration ?? 0;
+				} catch (error) {
+					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
+				}
+
+				return {
+					title: dirent.name,
+					src: filePathResolved,
+					type: mapper[extension] ?? "audio/mpeg",
+					length
+				};
+			});
+
+			return await Promise.all(audioMetadataPromises);
+			// return dirents
+			// 	.filter(dirent => dirent.isFile())
+			// 	.filter(dirent => validExtensions.includes(path.extname(dirent.name).toLowerCase()))
+			// 	.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
+			// 	.map(dirent => {
+			// 		const extension = path.extname(dirent.name).toLowerCase();
+			//
+			// 		return {
+			// 			title: dirent.name,
+			// 			src: path.resolve(filePath, dirent.name),
+			// 			type: mapper[extension] ?? "audio/mpeg"
+			// 		};
+			// 	});
 		} catch (error) {
 			logger.error("getAudioFiles", error);
 

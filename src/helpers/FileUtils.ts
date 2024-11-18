@@ -52,6 +52,7 @@ export interface AudioBookMetadata {
 	title: string;
 	src: string;
 	type: string;
+	length: number;
 }
 
 export interface ScanResult {
