@@ -8,7 +8,8 @@ import { exec } from "child_process";
 import util from "util";
 import unzipper from "unzipper";
 import { v4 as uuidv4 } from "uuid";
-import { parseFile } from "music-metadata";
+// import { parseFile } from "music-metadata";
+import * as mm from "music-metadata";
 
 import { Logger } from "(src)/helpers/Logger";
 import {
@@ -671,7 +672,7 @@ export class BooksStore {
 
 				let length = 0;
 				try {
-					const metadata = await parseFile(filePathResolved);
+					const metadata = await mm.parseFile(filePathResolved);
 					length = metadata.format.duration ?? 0;
 				} catch (error) {
 					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
