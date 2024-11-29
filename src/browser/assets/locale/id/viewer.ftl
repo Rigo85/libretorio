@@ -292,6 +292,7 @@ pdfjs-ink-canvas =
 ## This is used in an aria label to help to understand the role of the resizer.
 
 
+# Translations for ngx-extended-pdf-viewer additions only available in en-US
 pdfjs-download-button =
     .title = Download
 pdfjs-download-button-label = Download
@@ -299,12 +300,12 @@ pdfjs-document-properties-size-kb = { NUMBER($kb, maximumSignificantDigits: 3) }
 pdfjs-document-properties-size-mb = { NUMBER($mb, maximumSignificantDigits: 3) } MB ({ $b } bytes)
 pdfjs-document-properties-date-time-string = { DATETIME($dateObj, dateStyle: "short", timeStyle: "medium") }
 pdfjs-find-match-count =
-    { NUMBER($total) ->
+    { $total ->
         [one] { $current } of { $total } match
        *[other] { $current } of { $total } matches
     }
 pdfjs-find-match-count-limit =
-    { NUMBER($limit) ->
+    { $limit ->
         [one] More than { $limit } match
        *[other] More than { $limit } matches
     }
@@ -378,6 +379,8 @@ pdfjs-editor-colorpicker-pink =
 pdfjs-editor-colorpicker-red =
     .title = Red
 pdfjs-editor-highlight-show-all-button-label = Show all
+pdfjs-editor-highlight-show-all-button =
+    .title = Show all
 pdfjs-editor-new-alt-text-dialog-edit-label = Edit alt text (image description)
 pdfjs-editor-new-alt-text-dialog-add-label = Add alt text (image description)
 pdfjs-editor-new-alt-text-textarea =

@@ -196,6 +196,7 @@ pdfjs-password-cancel-button = Duyichin'
 ## This is used in an aria label to help to understand the role of the resizer.
 
 
+# Translations for ngx-extended-pdf-viewer additions only available in en-US
 pdfjs-save-button =
     .title = Save
 pdfjs-save-button-label = Save
@@ -244,12 +245,12 @@ pdfjs-find-entire-word-checkbox-label = Whole Words
 pdfjs-find-reached-top = Reached top of document, continued from bottom
 pdfjs-find-reached-bottom = Reached end of document, continued from top
 pdfjs-find-match-count =
-    { NUMBER($total) ->
+    { $total ->
         [one] { $current } of { $total } match
        *[other] { $current } of { $total } matches
     }
 pdfjs-find-match-count-limit =
-    { NUMBER($limit) ->
+    { $limit ->
         [one] More than { $limit } match
        *[other] More than { $limit } matches
     }
@@ -356,6 +357,8 @@ pdfjs-editor-colorpicker-pink =
 pdfjs-editor-colorpicker-red =
     .title = Red
 pdfjs-editor-highlight-show-all-button-label = Show all
+pdfjs-editor-highlight-show-all-button =
+    .title = Show all
 pdfjs-editor-new-alt-text-dialog-edit-label = Edit alt text (image description)
 pdfjs-editor-new-alt-text-dialog-add-label = Add alt text (image description)
 pdfjs-editor-new-alt-text-textarea =
