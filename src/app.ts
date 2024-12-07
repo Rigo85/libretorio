@@ -25,7 +25,7 @@ app.use(express.urlencoded({extended: true})); // parse application/x-www-form-u
 app.use(express.static(path.join(__dirname, "public"), {maxAge: 31557600000}));
 app.use(lusca.xframe("SAMEORIGIN"));
 app.use(lusca.xssProtection(true));
-app.use(helmet());
+// app.use(helmet());
 app.use(cors());
 
 app.get("/*", function (req, res, next) {
