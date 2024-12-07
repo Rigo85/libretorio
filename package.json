@@ -25,7 +25,7 @@
 	"author": "Rigoberto L. Salgado Reyes <rlsalgado2006@gmail.com>",
 	"license": "AGPL-3.0",
 	"engines": {
-		"node": "20.x"
+		"node": "22.x"
 	},
 	"dependencies": {
 		"7zip-bin": "^5.2.0",
