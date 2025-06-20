@@ -51,8 +51,8 @@ export class BooksStore {
 		return BooksStore.instance;
 	}
 
-	public async getBooksList(offset: number, limit: number, parentHash?: string): Promise<ScanResult> {
-		logger.info("getBooksList:", {parentHash: parentHash ?? "root", offset, limit});
+	public async getBooksList(offset: number, limit: number, cleanUp: boolean, parentHash?: string): Promise<ScanResult> {
+		logger.info("getBooksList:", {parentHash: parentHash ?? "root", offset, limit, cleanUp});
 
 		try {
 			const scanRoots = await getScanRoots();
@@ -63,12 +63,12 @@ export class BooksStore {
 			}
 
 			const directories = JSON.parse(scanRoots[0].directories) as Directory;
-			// const files = await getFiles(parentHash ?? directories.hash, offset, limit);
-			// const total = await getFilesCount(parentHash ?? directories.hash);
-			const [files, total] = await Promise.all([
-				getFiles(parentHash ?? directories.hash, offset, limit),
-				getFilesCount(parentHash ?? directories.hash)]
-			);
+			const [files, total] = cleanUp ?
+				[[], 0] :
+				await Promise.all([
+					getFiles(parentHash ?? directories.hash, offset, limit),
+					getFilesCount(parentHash ?? directories.hash)]
+				);
 
 			return {directories, files, total};
 		} catch (error) {

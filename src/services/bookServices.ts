@@ -63,7 +63,8 @@ async function onListEvent(ws: WebSocket, messageObj: { event: string; data: any
 		const parentHash = messageObj.data?.parentHash;
 		const offset = messageObj.data?.offset ?? 0;
 		const limit = messageObj.data?.limit ?? 50;
-		const scanResult = await BooksStore.getInstance().getBooksList(offset, limit, parentHash);
+		const cleanUp = messageObj.data?.cleanUp ?? false;
+		const scanResult = await BooksStore.getInstance().getBooksList(offset, limit, cleanUp, parentHash);
 		sendMessage(ws, {event: "list", data: scanResult});
 	} catch (error) {
 		logger.error("onListEvent", error);
