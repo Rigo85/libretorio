@@ -439,3 +439,30 @@ unverified-signature-warning = This PDF file contains a digital signature. The P
 pdfjs-infinite-scroll-button-label = Infinite scroll
 pdfjs-find-multiple-checkbox-label = match each word
 pdfjs-find-regexp-checkbox-label = regular expression
+pdfjs-free-text2 =
+    .aria-label = Text Editor
+    .default-content = Start typing…
+pdfjs-editor-undo-bar-message-highlight = Highlight removed
+pdfjs-editor-undo-bar-message-freetext = Text removed
+pdfjs-editor-undo-bar-message-ink = Drawing removed
+pdfjs-editor-undo-bar-message-stamp = Image removed
+pdfjs-editor-undo-bar-message-multiple =
+    { $count ->
+        [one] { $count } annotation removed
+       *[other] { $count } annotations removed
+    }
+pdfjs-editor-undo-bar-undo-button =
+    .title = Undo
+pdfjs-editor-undo-bar-undo-button-label = Undo
+pdfjs-editor-undo-bar-close-button =
+    .title = Close
+pdfjs-editor-undo-bar-close-button-label = Close
+# Additional translations for ngx-extended-pdf-viewer from the sr bleeding edge branch
+pdfjs-editor-resizer-label-top-left = Горњи леви угао — промени величину
+pdfjs-editor-resizer-label-top-middle = Средина горе — промени величину
+pdfjs-editor-resizer-label-top-right = Горњи десни угао — промени величину
+pdfjs-editor-resizer-label-middle-right = Средина десно — промени величину
+pdfjs-editor-resizer-label-bottom-right = Доњи десни угао — промени величину
+pdfjs-editor-resizer-label-bottom-middle = Средина доле — промени величину
+pdfjs-editor-resizer-label-bottom-left = Доњи леви угао — промени величину
+pdfjs-editor-resizer-label-middle-left = Средина лево — промени величину
