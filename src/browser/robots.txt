@@ -1,0 +1,18 @@
+# =========  AI crawlers we want to block completely =========
+User-agent: GPTBot       # OpenAI
+Disallow: /
+
+User-agent: ClaudeBot    # Anthropic
+Disallow: /
+
+User-agent: CCBot        # Common Crawl
+Disallow: /
+
+# =========  Default rules for all other crawlers ============
+User-agent: *
+Disallow: /
+
+# (Optional) If you need some static assets to remain crawlable
+# for rich-snippet rendering, uncomment specific Allow lines:
+# Allow: /assets/css/
+# Allow: /assets/img/
