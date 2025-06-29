@@ -70,7 +70,10 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 		store: new RedisStore({
 			sendCommand: (...args: string[]) => client.sendCommand(args),
 			prefix: "rate-limit:"
-		})
+		}),
+		skip: (req) =>
+			["GET", "HEAD"].includes(req.method) ||
+			/^\/(covers|assets)\//.test(req.path)
 	});
 
 	app.use(limiter);
