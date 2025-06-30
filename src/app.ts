@@ -32,7 +32,19 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 
 	app.use(requestIp.mw());
 
-	app.use(helmet());
+	app.use(helmet({
+		contentSecurityPolicy: {
+			useDefaults: true,                          // mantiene las demás defensas
+			directives: {
+				// eslint-disable-next-line @typescript-eslint/naming-convention
+				"script-src-attr": ["'unsafe-inline'"]   // permite onclick=...
+			}
+		}
+		// // contentSecurityPolicy: false   // ← deshabilita CSP por completo
+		// contentSecurityPolicy: {
+		// 	reportOnly: true   // CSP-Report-Only header
+		// }
+	}));
 	app.use(compression());
 
 	app.use(express.json());
