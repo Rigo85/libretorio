@@ -29,6 +29,7 @@ export class UserRepository {
 					passwordHash: rows[0].password_hash,
 					isAdmin: rows[0].is_admin,
 					preferences: rows[0].prefs,
+					isActive: rows[0].is_active,
 					createdAt: rows[0].created_at
 				};
 			}

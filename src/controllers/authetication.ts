@@ -33,6 +33,12 @@ export async function login(req: Request, res: Response): Promise<void> {
 			return;
 		}
 
+		if (!user.isActive) {
+			logger.info(`Login attempt with non-active user: ${email}`);
+			res.status(401).json({error: "User is not active."});
+			return;
+		}
+
 		const passwordValid = await verify(user.passwordHash, password);
 		if (!passwordValid) {
 			logger.info(`Login attempt with invalid password for user: ${email}`);

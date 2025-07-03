@@ -4,5 +4,6 @@ export interface User {
 	passwordHash: string;
 	isAdmin: boolean;
 	preferences: any;
+	isActive: boolean;
 	createdAt: Date;
 }
