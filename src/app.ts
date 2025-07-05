@@ -97,8 +97,8 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.set("port", config.production.server.port);
 	app.use(express.static(path.join(__dirname, "public"), {maxAge: 31557600000}));
 
-	app.use("/covers", express.static(path.join(__dirname, "public/covers")));
-	app.use("/temp_covers", express.static(path.join(__dirname, "public/temp_covers")));
+	app.use("/covers", express.static(path.join(__dirname, "public/covers"), {fallthrough: false}));
+	app.use("/temp_covers", express.static(path.join(__dirname, "public/temp_covers"), {fallthrough: false}));
 
 	app.get("/api/csrf-token", async (req: Request, res: Response) => {
 		res.json({csrfToken: req.csrfToken()});
