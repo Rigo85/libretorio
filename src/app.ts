@@ -76,7 +76,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 
 	const limiter = rateLimit({
 		windowMs: 15 * 60 * 1000,
-		limit: 100,
+		limit: 300,
 		standardHeaders: true,
 		legacyHeaders: false,
 		store: new RedisStore({
