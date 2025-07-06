@@ -46,6 +46,8 @@ export async function login(req: Request, res: Response): Promise<void> {
 			return;
 		}
 
+		await UserRepository.getInstance().updateSessionId(user.id, req.sessionID);
+
 		req.session.userId = user.id;
 		req.session.isAdmin = user.isAdmin;
 

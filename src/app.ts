@@ -16,6 +16,7 @@ import { Logger } from "(src)/helpers/Logger";
 import { config } from "(src)/config/configuration";
 import { currentUser, login, logout } from "(src)/controllers/authetication";
 import RedisAdapter from "(src)/db/RedisAdapter";
+import { singleSessionMiddleware } from "(src)/middlewares/singleSessionMiddleware";
 
 export async function bootstrap(): Promise<{ app: express.Express; sessionParser: any }> {
 	const logger = new Logger("App");
@@ -65,6 +66,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 		rolling: true                       // renueva maxAge en cada respuesta
 	});
 	app.use(sessionParser);
+	app.use(singleSessionMiddleware);
 	app.use(csrf());
 
 	const client = await RedisAdapter.initialize();

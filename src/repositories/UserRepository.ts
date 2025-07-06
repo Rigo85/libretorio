@@ -41,4 +41,51 @@ export class UserRepository {
 			return undefined;
 		}
 	}
+
+	public async updateSessionId(userId: string, sessionId: string): Promise<boolean> {
+		try {
+			const query = "UPDATE users SET session_id = $1 WHERE id = $2";
+			await PostgresAdapter.getInstance().query(query, [sessionId, userId]);
+			return true;
+		} catch (error) {
+			logger.error("updateSessionId", error.message);
+			return false;
+		}
+	}
+
+	public async getSessionId(userId: string): Promise<string | null> {
+		try {
+			const query = "SELECT session_id FROM users WHERE id = $1";
+			const rows = await PostgresAdapter.getInstance().query(query, [userId]);
+
+			return rows?.length ? rows[0].session_id : undefined;
+		} catch (error) {
+			logger.error("getSessionId", error.message);
+
+			return undefined;
+		}
+	}
+
+	/**
+	 * Invalidates all sessions for a user by setting session_id to NULL.
+	 * use cases:
+	 * 1. User logs out from all devices.
+	 * 2. Admin revokes all sessions for a user.
+	 * 3. Changing password or security settings that require session invalidation.
+	 *
+	 * @param userId - The ID of the user whose sessions should be invalidated.
+	 * @returns {Promise<boolean>} - Returns true if the operation was successful, false otherwise.
+	 */
+	public async invalidateAllSessions(userId: string): Promise<boolean> {
+		try {
+			const query = "UPDATE users SET session_id = NULL WHERE id = $1";
+			await PostgresAdapter.getInstance().query(query, [userId]);
+
+			return true;
+		} catch (error) {
+			logger.error("invalidateAllSessions", error.message);
+
+			return false;
+		}
+	}
 }
