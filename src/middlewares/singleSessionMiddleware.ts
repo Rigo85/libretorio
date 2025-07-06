@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { UserRepository } from "(src)/repositories/UserRepository";
-import {Logger} from "(src)/helpers/Logger";
+import { Logger } from "(src)/helpers/Logger";
 
 const logger = new Logger("SingleSession Middleware");
 
