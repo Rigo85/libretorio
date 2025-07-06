@@ -88,8 +88,8 @@ export class WSServer {
 			logger.info(`Cliente "${userId}" desconectado.`);
 		});
 
-		ws.on("message", (message) => {
-			onMessageEvent(message, ws);
+		ws.on("message", async (message) => {
+			await onMessageEvent(message, ws);
 		});
 	}
 

@@ -12,11 +12,31 @@ import { FileKind } from "(src)/models/interfaces/File";
 import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { ExtendedWebSocket, WebsocketAction } from "(src)/models/interfaces/WebSocketTypes";
 import { AuditLogsService } from "(src)/services/AuditLogsService";
+import { UserRepository } from "(src)/repositories/UserRepository";
 
 const logger = new Logger("Book Service");
 
-export function onMessageEvent(message: any, ws: ExtendedWebSocket) {
+export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 	const {userId} = ws.session;
+
+	try {
+		const storedSessionId = await UserRepository.getInstance().getSessionId(userId);
+
+		if (storedSessionId !== (ws.session as any)?.req.sessionID) {
+			logger.info(`Terminating WebSocket connection for user '${userId}' due to session change.`);
+
+			sendMessage(ws, {
+				event: "session_expired",
+				data: {message: "Your session has been invalidated by a login on another device."}
+			});
+
+			ws.terminate();
+			return;
+		}
+	} catch (error) {
+		logger.error("Error verifying WebSocket session:", error);
+	}
+
 	let messageObj: { event: string; data: any };
 	let event: WebsocketAction = "default";
 
