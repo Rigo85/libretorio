@@ -20,7 +20,8 @@ export async function singleSessionMiddleware(req: Request, res: Response, next:
 					else resolve();
 				});
 			});
-			res.status(401).json({error: "Session has been invalidated by a login from another device."});
+			// res.status(401).json({error: "Session has been invalidated by a login from another device."});
+			res.redirect("/auth/login");
 			return;
 		}
 
