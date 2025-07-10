@@ -83,7 +83,7 @@ export class WSServer {
 		const checkInterval = setInterval(() => {
 			if (!ws.session ||
 				!ws.session.lastActivity ||
-				Date.now() - ws.session.lastActivity > 2 * 60 * 60 * 1000) {
+				Date.now() - ws.session.lastActivity > 1 * 60 * 60 * 1000) {
 
 				ws.send(JSON.stringify({
 					event: "session_expired",

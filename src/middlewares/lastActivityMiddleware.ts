@@ -13,7 +13,7 @@ export async function lastActivityMiddleware(req: Request, res: Response, next: 
 		}
 
 		const now = Date.now();
-		if (now - (req.session as SessionData).lastActivity > 2 * 60 * 60 * 1000) {
+		if (now - (req.session as SessionData).lastActivity > 1 * 60 * 60 * 1000) {
 			await new Promise<void>((resolve, reject) => {
 				req.session.destroy((err) => {
 					if (err) reject(err);

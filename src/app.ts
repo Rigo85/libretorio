@@ -62,7 +62,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 			secure: true,
 			// secure: config.production.server.environment === "production",
 			sameSite: "lax",
-			maxAge: 2 * 60 * 60 * 1000       // 2 horas
+			maxAge: 1 * 60 * 60 * 1000       // 1 horas
 		},
 		rolling: true                       // renueva maxAge en cada respuesta
 	});
