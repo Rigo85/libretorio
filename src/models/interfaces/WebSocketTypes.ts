@@ -10,6 +10,7 @@ export interface SessionData {
 export interface ExtendedWebSocket extends WebSocket {
 	isAlive: boolean;
 	session: SessionData;
+	lastActivityTime: number;
 }
 
 export interface WSServerConfig {

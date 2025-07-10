@@ -76,15 +76,16 @@ export class WSServer {
 		const {userId, isAdmin} = ws.session;
 		logger.info(`Usuario conectado: ${userId}, admin: ${isAdmin}`);
 
-		if (!ws.session.lastActivity) {
-			ws.session.lastActivity = Date.now();
-		}
+		ws.lastActivityTime = Date.now();
 
 		const checkInterval = setInterval(() => {
-			if (!ws.session ||
-				!ws.session.lastActivity ||
-				Date.now() - ws.session.lastActivity > 1 * 60 * 60 * 1000) {
+			logger.info(`Checking activity: last = ${new Date(ws.lastActivityTime)}, 
+			difference = ${(Date.now() - ws.lastActivityTime) / 1000 / 60} minutes`);
 
+			if (!ws.lastActivityTime ||
+				Date.now() - ws.lastActivityTime > 10 * 60 * 1000) {
+
+				logger.info(`Closing connection of '${ws.session.userId}' due to inactivity`);
 				ws.send(JSON.stringify({
 					event: "session_expired",
 					data: {message: "Your session has expired due to inactivity."}
@@ -109,7 +110,7 @@ export class WSServer {
 		});
 
 		ws.on("message", async (message) => {
-			ws.session.lastActivity = Date.now();
+			ws.lastActivityTime = Date.now();
 			await onMessageEvent(message, ws);
 		});
 	}
