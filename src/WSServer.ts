@@ -79,8 +79,8 @@ export class WSServer {
 		ws.lastActivityTime = Date.now();
 
 		const checkInterval = setInterval(() => {
-			logger.info(`Checking activity: last = ${new Date(ws.lastActivityTime)}, 
-			difference = ${(Date.now() - ws.lastActivityTime) / 1000 / 60} minutes`);
+			// logger.info(`Checking activity: last = ${new Date(ws.lastActivityTime)},
+			// difference = ${(Date.now() - ws.lastActivityTime) / 1000 / 60} minutes`);
 
 			if (!ws.lastActivityTime ||
 				Date.now() - ws.lastActivityTime > 10 * 60 * 1000) {
@@ -94,18 +94,18 @@ export class WSServer {
 				clearInterval(checkInterval);
 				ws.close();
 			}
-		}, 30000); // Verificar cada 30 segundos
+		}, 30000);
 
 		ws.on("pong", () => {
 			ws.isAlive = true;
 		});
 
 		ws.on("error", (error) => {
-			logger.error(`Error en conexión del usuario ${userId}:`, error);
+			logger.error(`User connection error for ${userId}:`, error);
 		});
 
 		ws.on("close", () => {
-			logger.info(`Cliente "${userId}" desconectado.`);
+			logger.info(`Client "${userId}" disconnected.`);
 			clearInterval(checkInterval);
 		});
 
@@ -114,11 +114,10 @@ export class WSServer {
 				const msgData = JSON.parse(message.toString());
 				if (msgData.event && msgData.event !== "pong" && msgData.event !== "ping") {
 					ws.lastActivityTime = Date.now();
-					logger.info(`Actualizando lastActivityTime para usuario ${ws.session.userId}`);
+					// logger.info(`Updating lastActivityTime for user ${ws.session.userId}`);
 				}
 			} catch (e) {
-				// Si no es JSON, probablemente sea un mensaje interno de WebSocket
-				logger.info("Mensaje no JSON recibido, no actualizando lastActivityTime");
+				// logger.info("Non-JSON message received, not updating lastActivityTime");
 			}
 
 			await onMessageEvent(message, ws);
