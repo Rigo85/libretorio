@@ -73,13 +73,13 @@ export class WSServer {
 	}
 
 	private handleConnection(ws: ExtendedWebSocket): void {
-		const {userId, isAdmin, lastActivity} = ws.session;
+		const {userId, isAdmin} = ws.session;
 		logger.info(`Usuario conectado: ${userId}, admin: ${isAdmin}`);
 
 		const checkInterval = setInterval(() => {
 			if (!ws.session ||
-				!lastActivity ||
-				Date.now() - lastActivity > 2 * 60 * 60 * 1000) {
+				!ws.session.lastActivity ||
+				Date.now() - ws.session.lastActivity > 2 * 60 * 60 * 1000) {
 
 				ws.send(JSON.stringify({
 					event: "session_expired",

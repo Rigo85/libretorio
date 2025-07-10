@@ -5,7 +5,7 @@ import { SessionData } from "(src)/models/interfaces/WebSocketTypes";
 const logger = new Logger("LastActivity Middleware");
 
 export async function lastActivityMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-	logger.info("Checking last activity timestamp...");
+	// logger.info("Checking last activity timestamp...");
 
 	if (req.session) {
 		if (!(req.session as SessionData).lastActivity) {
