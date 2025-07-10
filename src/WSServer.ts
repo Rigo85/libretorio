@@ -76,6 +76,10 @@ export class WSServer {
 		const {userId, isAdmin} = ws.session;
 		logger.info(`Usuario conectado: ${userId}, admin: ${isAdmin}`);
 
+		if (!ws.session.lastActivity) {
+			ws.session.lastActivity = Date.now();
+		}
+
 		const checkInterval = setInterval(() => {
 			if (!ws.session ||
 				!ws.session.lastActivity ||
@@ -105,6 +109,7 @@ export class WSServer {
 		});
 
 		ws.on("message", async (message) => {
+			ws.session.lastActivity = Date.now();
 			await onMessageEvent(message, ws);
 		});
 	}
