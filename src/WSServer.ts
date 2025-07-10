@@ -110,7 +110,17 @@ export class WSServer {
 		});
 
 		ws.on("message", async (message) => {
-			ws.lastActivityTime = Date.now();
+			try {
+				const msgData = JSON.parse(message.toString());
+				if (msgData.event && msgData.event !== "pong" && msgData.event !== "ping") {
+					ws.lastActivityTime = Date.now();
+					logger.info(`Actualizando lastActivityTime para usuario ${ws.session.userId}`);
+				}
+			} catch (e) {
+				// Si no es JSON, probablemente sea un mensaje interno de WebSocket
+				logger.info("Mensaje no JSON recibido, no actualizando lastActivityTime");
+			}
+
 			await onMessageEvent(message, ws);
 		});
 	}
