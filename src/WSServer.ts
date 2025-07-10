@@ -83,7 +83,7 @@ export class WSServer {
 			// difference = ${(Date.now() - ws.lastActivityTime) / 1000 / 60} minutes`);
 
 			if (!ws.lastActivityTime ||
-				Date.now() - ws.lastActivityTime > 10 * 60 * 1000) {
+				Date.now() - ws.lastActivityTime > 1 * 60 * 60 * 1000) { // 1 hour
 
 				logger.info(`Closing connection of '${ws.session.userId}' due to inactivity`);
 				ws.send(JSON.stringify({
