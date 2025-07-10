@@ -81,14 +81,26 @@ export class ConversionService {
 				const {stderr} = await execPromise(command);
 				if (stderr) {
 					logger.error(`convertToPdf: ${stderr}`);
-					return {error: "An error has occurred converting to pdf.", success: "ERROR"};
+					// return {error: "An error has occurred converting to pdf.", success: "ERROR"};
 				}
 
 				if (utilFun) {
 					await utilFun(data.filePath, data.id);
 				}
 
-				return {pdfPath: path.join("/cache", data.id, `${data.id}.pdf`), success: "OK"};
+				if (fs.existsSync(pdfPath)) {
+					const stats = fs.statSync(pdfPath);
+					if (stats.size > 0) {
+						logger.info(`PDF file created successfully: '${pdfPath}'`);
+						return {pdfPath: path.join("/cache", data.id, `${data.id}.pdf`), success: "OK"};
+					} else {
+						logger.error(`PDF file is empty: '${pdfPath}'`);
+						return {error: "An error has occurred converting to pdf.", success: "ERROR"};
+					}
+				} else {
+					logger.error(`PDF file not found after conversion: '${pdfPath}'`);
+					return {error: "An error has occurred converting to pdf.", success: "ERROR"};
+				}
 			}
 		} catch (error) {
 			logger.error("convertToPdf", error);
