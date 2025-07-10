@@ -164,7 +164,9 @@ async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; d
 			"xls": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
 			"xlsx": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
 			"rtf": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"txt": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
+			// "txt": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
+			"txt": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
+			"md": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
 			"html": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
 			"htm": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
 			"lit": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance())
