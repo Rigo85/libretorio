@@ -17,6 +17,7 @@ import { config } from "(src)/config/configuration";
 import { currentUser, login, logout } from "(src)/controllers/authetication";
 import RedisAdapter from "(src)/db/RedisAdapter";
 import { singleSessionMiddleware } from "(src)/middlewares/singleSessionMiddleware";
+import { lastActivityMiddleware } from "(src)/middlewares/lastActivityMiddleware";
 
 export async function bootstrap(): Promise<{ app: express.Express; sessionParser: any }> {
 	const logger = new Logger("App");
@@ -58,13 +59,15 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 		saveUninitialized: false,
 		cookie: {
 			httpOnly: true,
-			secure: true, // sólo HTTPS TODO: habilitar en producción
+			secure: true,
 			// secure: config.production.server.environment === "production",
 			sameSite: "lax",
 			maxAge: 2 * 60 * 60 * 1000       // 2 horas
 		},
 		rolling: true                       // renueva maxAge en cada respuesta
 	});
+
+	app.use(lastActivityMiddleware);
 	app.use(sessionParser);
 	app.use(singleSessionMiddleware);
 	app.use(csrf());

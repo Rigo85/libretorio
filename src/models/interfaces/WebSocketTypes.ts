@@ -4,6 +4,7 @@ import http from "http";
 export interface SessionData {
 	userId: string;
 	isAdmin: boolean;
+	lastActivity?: number;
 }
 
 export interface ExtendedWebSocket extends WebSocket {

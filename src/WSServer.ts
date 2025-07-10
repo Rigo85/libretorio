@@ -73,8 +73,23 @@ export class WSServer {
 	}
 
 	private handleConnection(ws: ExtendedWebSocket): void {
-		const {userId, isAdmin} = ws.session;
+		const {userId, isAdmin, lastActivity} = ws.session;
 		logger.info(`Usuario conectado: ${userId}, admin: ${isAdmin}`);
+
+		const checkInterval = setInterval(() => {
+			if (!ws.session ||
+				!lastActivity ||
+				Date.now() - lastActivity > 2 * 60 * 60 * 1000) {
+
+				ws.send(JSON.stringify({
+					event: "session_expired",
+					data: {message: "Your session has expired due to inactivity."}
+				}));
+
+				clearInterval(checkInterval);
+				ws.close();
+			}
+		}, 30000); // Verificar cada 30 segundos
 
 		ws.on("pong", () => {
 			ws.isAlive = true;
@@ -86,6 +101,7 @@ export class WSServer {
 
 		ws.on("close", () => {
 			logger.info(`Cliente "${userId}" desconectado.`);
+			clearInterval(checkInterval);
 		});
 
 		ws.on("message", async (message) => {
