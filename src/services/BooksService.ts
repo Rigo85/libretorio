@@ -36,12 +36,9 @@ export class BooksService {
 			}
 
 			const directories = JSON.parse(scanRoots[0].directories) as Directory;
-			const [files, total] = cleanUp ?
-				[[], 0] :
-				await Promise.all([
-					FileRepository.getInstance().findAllByHash(parentHash ?? directories.hash, offset, limit),
-					FileRepository.getInstance().countByHash(parentHash ?? directories.hash)]
-				);
+			const {files, total} = cleanUp ?
+				{files: [], total: 0} :
+				await FileRepository.getInstance().findAllByHashWithCount(parentHash ?? directories.hash, offset, limit);
 
 			return {directories, files, total};
 		} catch (error) {
@@ -97,10 +94,7 @@ export class BooksService {
 			}
 
 			const directories = JSON.parse(scanRoots[0].directories) as Directory;
-			const [files, total] = await Promise.all([
-				FileRepository.getInstance().findAllByText(searchText, offset, limit),
-				FileRepository.getInstance().countByText(searchText)
-			]);
+			const {files, total} = await FileRepository.getInstance().findAllByTextWithCount(searchText, offset, limit);
 
 			return {directories, files, total};
 		} catch (error) {

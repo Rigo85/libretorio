@@ -44,10 +44,10 @@ export class FileRepository {
 		}
 	}
 
-	public async findAllByHash(parentHash: string, offset: number, limit: number): Promise<File[]> {
+	public async findAllByHashWithCount(parentHash: string, offset: number, limit: number): Promise<{ files: File[]; total: number }> {
 		try {
 			const query = `
-                SELECT *
+                SELECT *, COUNT(*) OVER() AS total_count
                 FROM archive a
                 WHERE a."parentHash" = $1
                 ORDER BY a.id ASC
@@ -56,75 +56,44 @@ export class FileRepository {
 			const values = [parentHash, offset, limit];
 			const rows = await PostgresAdapter.getInstance().query(query, values);
 
-			return rows || [];
-		} catch (error) {
-			logger.error("findAllByHash", error.message);
+			if (!rows?.length) return {files: [], total: 0};
 
-			return [];
+			const total = parseInt(rows[0].total_count, 10);
+			const files = rows.map(({total_count, ...file}: any) => file as File);
+
+			return {files, total};
+		} catch (error) {
+			logger.error("findAllByHashWithCount", error.message);
+
+			return {files: [], total: 0};
 		}
 	}
 
-	public async countByHash(parentHash: string): Promise<number> {
+	public async findAllByTextWithCount(searchText: string, offset: number, limit: number): Promise<{ files: File[]; total: number }> {
 		try {
 			const query = `
-                SELECT COUNT(*) AS count
-                FROM archive a
-                WHERE a."parentHash" = $1
-			`;
-			const values = [parentHash];
-			const rows = await PostgresAdapter.getInstance().query(query, values);
-
-			return rows?.length ? rows[0].count : 0;
-		} catch (error) {
-			logger.error("countByHash", error.message);
-
-			return 0;
-		}
-	}
-
-	public async findAllByText(searchText: string, offset: number, limit: number): Promise<File[]> {
-		try {
-			const query = `
-                SELECT *
+                SELECT *, COUNT(*) OVER() AS total_count
                 FROM archive
                 WHERE name ILIKE '%' || $1 || '%'
                    OR ("localDetails" IS NOT NULL
                   AND "localDetails"::text ILIKE '%' || $1 || '%')
                    OR ("webDetails" IS NOT NULL
                   AND "webDetails"::text ILIKE '%' || $1 || '%')
-                OFFSET $2 LIMIT $3;
+                OFFSET $2 LIMIT $3
 			`;
 			const values = [searchText, offset, limit];
 			const rows = await PostgresAdapter.getInstance().query(query, values);
 
-			return rows || [];
+			if (!rows?.length) return {files: [], total: 0};
+
+			const total = parseInt(rows[0].total_count, 10);
+			const files = rows.map(({total_count, ...file}: any) => file as File);
+
+			return {files, total};
 		} catch (error) {
-			logger.error("findAllByText", error.message);
+			logger.error("findAllByTextWithCount", error.message);
 
-			return [];
-		}
-	}
-
-	public async countByText(searchText: string): Promise<number> {
-		try {
-			const query = `
-                SELECT COUNT(*) AS count
-                FROM archive
-                WHERE
-                    name ILIKE '%' || $1 || '%'
-                   OR ("localDetails" IS NOT NULL
-                  AND "localDetails"::text ILIKE '%' || $1 || '%')
-                   OR ("webDetails" IS NOT NULL
-                  AND "webDetails"::text ILIKE '%' || $1 || '%')
-			`;
-			const values = [searchText];
-			const rows = await PostgresAdapter.getInstance().query(query, values);
-
-			return rows?.length ? rows[0].count : 0;
-		} catch (error) {
-			logger.error("countByText", error.message);
-
-			return 0;
+			return {files: [], total: 0};
 		}
 	}
 }

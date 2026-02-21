@@ -11,6 +11,8 @@ export interface ExtendedWebSocket extends WebSocket {
 	isAlive: boolean;
 	session: SessionData;
 	lastActivityTime: number;
+	cachedSessionId?: string;
+	sessionCacheExpiry?: number;
 }
 
 export interface WSServerConfig {
@@ -33,5 +35,6 @@ export type WebsocketAction =
 	"get_more_pages" |
 	"get_audio_book" |
 	"log_action" |
+	"ping" |
 	"default"
 	;

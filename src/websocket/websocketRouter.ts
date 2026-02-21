@@ -15,26 +15,34 @@ import { AuditLogsService } from "(src)/services/AuditLogsService";
 import { UserRepository } from "(src)/repositories/UserRepository";
 
 const logger = new Logger("Book Service");
+const SESSION_CACHE_TTL_MS = 30_000; // TTL caché de validación de sesión WS
 
 export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 	const {userId} = ws.session;
 
-	try {
-		const storedSessionId = await UserRepository.getInstance().getSessionId(userId);
+	const now = Date.now();
+	const cacheValid = ws.cachedSessionId !== undefined && ws.sessionCacheExpiry !== undefined && now < ws.sessionCacheExpiry;
 
-		if (storedSessionId !== (ws.session as any)?.req.sessionID) {
-			logger.info(`Terminating WebSocket connection for user '${userId}' due to session change.`);
-
-			sendMessage(ws, {
-				event: "session_expired",
-				data: {message: "Your session has been invalidated by a login on another device."}
-			});
-
-			ws.terminate();
-			return;
+	if (!cacheValid) {
+		try {
+			const storedSessionId = await UserRepository.getInstance().getSessionId(userId);
+			ws.cachedSessionId = storedSessionId;
+			ws.sessionCacheExpiry = now + SESSION_CACHE_TTL_MS;
+		} catch (error) {
+			logger.error("Error verifying WebSocket session:", error);
 		}
-	} catch (error) {
-		logger.error("Error verifying WebSocket session:", error);
+	}
+
+	if (ws.cachedSessionId !== undefined && ws.cachedSessionId !== (ws.session as any)?.req.sessionID) {
+		logger.info(`Terminating WebSocket connection for user '${userId}' due to session change.`);
+
+		sendMessage(ws, {
+			event: "session_expired",
+			data: {message: "Your session has been invalidated by a login on another device."}
+		});
+
+		ws.terminate();
+		return;
 	}
 
 	let messageObj: { event: string; data: any };
@@ -43,7 +51,9 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 	try {
 		messageObj = JSON.parse(message);
 		event = messageObj.event as WebsocketAction;
-		AuditLogsService.getInstance().logAction(userId, event, messageObj);
+		if (event !== "ping") {
+			AuditLogsService.getInstance().logAction(userId, event, messageObj);
+		}
 	} catch (error) {
 		logger.error("onMessageEvent", error);
 	}
@@ -80,6 +90,9 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 		// eslint-disable-next-line @typescript-eslint/naming-convention
 		"log_action": async () => {
 			// ignore log_action event here.
+		},
+		"ping": async () => {
+			// heartbeat desde el cliente — se ignora silenciosamente
 		},
 		"default": async () => {
 			ws.send("{\"event\":\"errors\", \"data\": {\"errors\":[\"An error has occurred. Invalid event kind.\"]}}");
