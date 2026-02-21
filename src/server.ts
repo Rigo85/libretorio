@@ -56,6 +56,10 @@ async function fullServerStart() {
 		app.use(errorHandler());
 	} else {
 		app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+			if (err.status === 404) {
+				res.status(404).end();
+				return;
+			}
 			logger.error(err);
 			res.status(err.status || 500);
 			res.send({error: "Internal Server Error", message: err.message || "An unexpected error occurred."});
