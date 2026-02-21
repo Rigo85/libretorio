@@ -10,6 +10,7 @@
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "esModuleInterop": true,
+        "skipLibCheck": true,
         "allowSyntheticDefaultImports": true,
         "paths": {
             "*": [
