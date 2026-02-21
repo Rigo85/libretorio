@@ -59,6 +59,7 @@ export class FileRepository {
 			if (!rows?.length) return {files: [], total: 0};
 
 			const total = parseInt(rows[0].total_count, 10);
+			// eslint-disable-next-line @typescript-eslint/naming-convention
 			const files = rows.map(({total_count, ...file}: any) => file as File);
 
 			return {files, total};
@@ -87,6 +88,7 @@ export class FileRepository {
 			if (!rows?.length) return {files: [], total: 0};
 
 			const total = parseInt(rows[0].total_count, 10);
+			// eslint-disable-next-line @typescript-eslint/naming-convention
 			const files = rows.map(({total_count, ...file}: any) => file as File);
 
 			return {files, total};
