@@ -6,7 +6,7 @@ import { ScanResult } from "(src)/models/interfaces/ScanResult";
 import { File } from "(src)/models/interfaces/File";
 import { getWebDetailsCoverId } from "(src)/utils/fileUtils";
 import { checkIfPathExistsAndIsFile } from "(src)/utils/filesystemUtils";
-import shell from "shelljs";
+import { promises as fsPromises } from "fs";
 import path from "path";
 
 const logger = new Logger("BooksService");
@@ -60,11 +60,11 @@ export class BooksService {
 				if (cover_i) {
 					const coverPath = path.join(__dirname, "..", "public", "temp_covers", `${cover_i}.jpg`);
 					if (checkIfPathExistsAndIsFile(coverPath)) {
-						const cpResponse = shell.cp(coverPath, path.join(__dirname, "..", "public", "covers", `${cover_i}.jpg`));
-						if (cpResponse.code === 0) {
+						try {
+							await fsPromises.copyFile(coverPath, path.join(__dirname, "..", "public", "covers", `${cover_i}.jpg`));
 							return true;
-						} else {
-							logger.error(`updateBooksDetails(code=${cpResponse.code})`, cpResponse.stderr ?? "Error copying cover image.");
+						} catch (cpError: any) {
+							logger.error("updateBooksDetails", cpError.message ?? "Error copying cover image.");
 						}
 					} else {
 						logger.error("updateBooksDetails", `Cover image not found: "${coverPath}".`);

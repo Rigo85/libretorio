@@ -1,20 +1,22 @@
-import shell from "shelljs";
+import { execSync } from "child_process";
 import path from "path";
 
-shell.cp("-R", "src/services/calibre", "dist/services");
-// shell.mkdir("-p", "dist/public/covers");
-// shell.mkdir("-p", "dist/public/temp_covers");
-// shell.mkdir("-p", "dist/public/cache");
-// shell.mkdir("-p", "dist/public/books");
-shell.mkdir("-p", "dist/public");
+const run = (cmd: string) => execSync(cmd, { stdio: "inherit" });
 
-shell.cp("-R", "src/browser/*", "dist/public");
+run("cp -R src/services/calibre dist/services");
+// run("mkdir -p dist/public/covers");
+// run("mkdir -p dist/public/temp_covers");
+// run("mkdir -p dist/public/cache");
+// run("mkdir -p dist/public/books");
+run("mkdir -p dist/public");
 
-shell.ln("-s", "/media/RIGO7/BACKUP/LIBROS", "dist/public/books");
-shell.ln("-s", "/media/RIGO7/Libretorio-conf/covers", "dist/public/covers");
-shell.ln("-s", "/media/RIGO7/Libretorio-conf/cache", "dist/public/cache");
-shell.ln("-s", "/media/RIGO7/Libretorio-conf/temp_covers", "dist/public/temp_covers");
+run("cp -R src/browser/. dist/public");
+
+run("ln -sfn /media/RIGO7/BACKUP/LIBROS dist/public/books");
+run("ln -sfn /media/RIGO7/Libretorio-conf/covers dist/public/covers");
+run("ln -sfn /media/RIGO7/Libretorio-conf/cache dist/public/cache");
+run("ln -sfn /media/RIGO7/Libretorio-conf/temp_covers dist/public/temp_covers");
 
 const publicDir = path.join("dist/public", `${__dirname.slice(1)}-Scanner`, "dist/public");
-shell.mkdir("-p", publicDir);
-shell.ln("-s", path.join(__dirname, "dist/public/books"), path.join(publicDir, "books"));
+run(`mkdir -p ${publicDir}`);
+run(`ln -sfn ${path.join(__dirname, "dist/public/books")} ${path.join(publicDir, "books")}`);

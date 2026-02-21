@@ -1,5 +1,4 @@
 import path from "path";
-import shell from "shelljs";
 import fs from "fs-extra";
 import * as unrar from "node-unrar-js";
 import { extractFull } from "node-7z";
