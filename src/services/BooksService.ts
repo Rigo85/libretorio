@@ -6,6 +6,7 @@ import { ScanResult } from "(src)/models/interfaces/ScanResult";
 import { File } from "(src)/models/interfaces/File";
 import { getWebDetailsCoverId } from "(src)/utils/fileUtils";
 import { checkIfPathExistsAndIsFile } from "(src)/utils/filesystemUtils";
+import { convertToWebp } from "(src)/utils/imageUtils";
 import { promises as fsPromises } from "fs";
 import path from "path";
 
@@ -61,7 +62,9 @@ export class BooksService {
 					const coverPath = path.join(__dirname, "..", "public", "temp_covers", `${cover_i}.jpg`);
 					if (checkIfPathExistsAndIsFile(coverPath)) {
 						try {
-							await fsPromises.copyFile(coverPath, path.join(__dirname, "..", "public", "covers", `${cover_i}.jpg`));
+							const destJpg = path.join(__dirname, "..", "public", "covers", `${cover_i}.jpg`);
+							await fsPromises.copyFile(coverPath, destJpg);
+							convertToWebp(destJpg);
 							return true;
 						} catch (cpError: any) {
 							logger.error("updateBooksDetails", cpError.message ?? "Error copying cover image.");
