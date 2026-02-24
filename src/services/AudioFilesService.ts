@@ -11,7 +11,7 @@ import * as mm from "music-metadata";
 import { IAudioMetadata } from "music-metadata";
 
 import { Logger } from "(src)/helpers/Logger";
-import { AudioBookMetadata } from "(src)/models/interfaces/AudioBookMetadata";
+import { AudioBookMetadata, AudioChapter } from "(src)/models/interfaces/AudioBookMetadata";
 import { formatTime } from "(src)/utils/datetimeUtils";
 
 const logger = new Logger("AudioFilesService");
@@ -57,12 +57,20 @@ export class AudioFilesService {
 				const filePathResolved = path.resolve(filePath, dirent.name);
 
 				let length = 0;
+				let chapters: AudioChapter[] | undefined;
 				try {
 					const metadata: IAudioMetadata = await mm.parseFile(
-						filePathResolved, {duration: true, skipCovers: true})
+						filePathResolved, {duration: true, skipCovers: true, includeChapters: true})
 					;
 					// logger.info(`path: "${filePathResolved}" -  metadata: ${JSON.stringify(metadata)}`);
 					length = metadata.format.duration ?? 0;
+					if ([".m4b", ".m4a"].includes(extension) && metadata.format.chapters?.length) {
+						const sampleRate = metadata.format.sampleRate ?? 44100;
+						chapters = metadata.format.chapters.map(ch => ({
+							title: ch.title,
+							startTimeInSeconds: ch.sampleOffset / sampleRate
+						}));
+					}
 				} catch (error) {
 					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
 				}
@@ -73,7 +81,8 @@ export class AudioFilesService {
 					title: dirent.name,
 					src: filePathResolved,
 					type: mapper[extension] ?? "audio/mpeg",
-					length: formatTime(length)
+					length: formatTime(length),
+					chapters
 				};
 			});
 
