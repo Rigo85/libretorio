@@ -62,7 +62,7 @@ async function fullServerStart() {
 			}
 			logger.error(err);
 			res.status(err.status || 500);
-			res.send({error: "Internal Server Error", message: err.message || "An unexpected error occurred."});
+			res.send({error: "Internal Server Error"});
 		});
 	}
 

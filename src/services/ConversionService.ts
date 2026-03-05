@@ -1,12 +1,18 @@
 import path from "path";
 import fs from "fs-extra";
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import util from "util";
 import { Logger } from "(src)/helpers/Logger";
 import { ConventToPdfUtilFunction, ConvertData, ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const logger = new Logger("ConversionService");
+
+interface ExecConfig {
+	bin: string;
+	args: string[];
+	env?: NodeJS.ProcessEnv;
+}
 
 export class ConversionService {
 	private static instance: ConversionService;
@@ -22,42 +28,46 @@ export class ConversionService {
 	}
 
 	public async convertWithCalibreToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertWithCalibreToPdf: '${JSON.stringify(data)}'`);
+		logger.info(`convertWithCalibreToPdf: '${JSON.stringify({id: data.id})}'`);
 
 		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
 		const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
 		const calibrePath = path.join(__dirname, "calibre", "ebook-convert");
-		const command = `${calibrePath} "${data.filePath}" "${pdfPath}"`;
 
-		return await this.convertToPdf(data, command);
+		return await this.convertToPdf(data, {bin: calibrePath, args: [data.filePath, pdfPath]});
 	}
 
 	async convertOfficeToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertOfficeToPdf: '${JSON.stringify(data)}'`);
+		logger.info(`convertOfficeToPdf: '${JSON.stringify({id: data.id})}'`);
 
 		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
-		const command = `LD_LIBRARY_PATH=/usr/lib/libreoffice/program/ libreoffice --headless --convert-to pdf --outdir "${pdfDirPath}" "${data.filePath}"`;
-		const utilFun = async (filePath: string, id: string) => {
+		const utilFun = async (_filePath: string, _id: string) => {
 			const pdfFile = path.join(pdfDirPath, `${data.id}.pdf`);
 			const outputPdfFile = path.join(pdfDirPath, `${path.basename(data.filePath, path.extname(data.filePath))}.pdf`);
 			fs.renameSync(outputPdfFile, pdfFile);
 		};
 
-		return await this.convertToPdf(data, command, utilFun);
+		const execConfig: ExecConfig = {
+			bin: "libreoffice",
+			args: ["--headless", "--convert-to", "pdf", "--outdir", pdfDirPath, data.filePath],
+			// eslint-disable-next-line @typescript-eslint/naming-convention
+			env: {...process.env, LD_LIBRARY_PATH: "/usr/lib/libreoffice/program/"}
+		};
+
+		return await this.convertToPdf(data, execConfig, utilFun);
 	}
 
 	async convertHtmlToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertHtmlToPdf: '${JSON.stringify(data)}'`);
+		logger.info(`convertHtmlToPdf: '${JSON.stringify({id: data.id})}'`);
 
 		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
 		const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
-		const command = `htmldoc --webpage --quiet -f "${pdfPath}" "${data.filePath}"`;
 
-		return await this.convertToPdf(data, command);
+		return await this.convertToPdf(data, {bin: "htmldoc", args: ["--webpage", "--quiet", "-f", pdfPath, data.filePath]});
 	}
 
-	async convertToPdf(data: ConvertData, command: string, utilFun?: ConventToPdfUtilFunction): Promise<ConvertToPdfResponse> {
-		logger.info(`convertToPdf: '${JSON.stringify(data)}'`);
+	async convertToPdf(data: ConvertData, execConfig: ExecConfig, utilFun?: ConventToPdfUtilFunction): Promise<ConvertToPdfResponse> {
+		logger.info(`convertToPdf: '${JSON.stringify({id: data.id})}'`);
 
 		try {
 			if (!data?.filePath) {
@@ -67,7 +77,7 @@ export class ConversionService {
 
 			if (!fs.existsSync(data.filePath)) {
 				logger.info(`The file does not exist: "${data.filePath}"`);
-				return {error: `The file does not exist: "${data.filePath}"`, success: "ERROR"};
+				return {error: "The file does not exist.", success: "ERROR"};
 			}
 
 			const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
@@ -78,10 +88,9 @@ export class ConversionService {
 			} else {
 				fs.mkdirSync(pdfDirPath, {recursive: true});
 
-				const {stderr} = await execPromise(command);
+				const {stderr} = await execFilePromise(execConfig.bin, execConfig.args, {env: execConfig.env});
 				if (stderr) {
-					logger.error(`convertToPdf: ${stderr}`);
-					// return {error: "An error has occurred converting to pdf.", success: "ERROR"};
+					logger.error(`convertToPdf stderr: ${stderr}`);
 				}
 
 				if (utilFun) {
@@ -105,7 +114,7 @@ export class ConversionService {
 		} catch (error) {
 			logger.error("convertToPdf", error);
 
-			return {success: "ERROR", error: error.message || "An error has occurred converting to pdf."};
+			return {success: "ERROR", error: "An error has occurred converting to pdf."};
 		}
 	}
 }

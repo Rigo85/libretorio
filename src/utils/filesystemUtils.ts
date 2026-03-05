@@ -109,6 +109,12 @@ export function savePagesToFile(pages: any[], id: string, sizeThreshold: number 
 	}
 }
 
+export function isPathWithinRoot(filePath: string, root: string): boolean {
+	const resolved = path.resolve(filePath);
+	const resolvedRoot = path.resolve(root);
+	return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep);
+}
+
 export function detectCompressionType(filePath: string): string {
 	try {
 		if (filePath?.trim()) {

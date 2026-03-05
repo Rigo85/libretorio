@@ -6,16 +6,31 @@ import { OpenLibraryService } from "(src)/services/OpenLibraryService";
 import { AudioFilesService } from "(src)/services/AudioFilesService";
 import { ConversionService } from "(src)/services/ConversionService";
 import { DecompressService } from "(src)/services/DecompressService";
-import { detectCompressionType } from "(src)/utils/filesystemUtils";
+import { detectCompressionType, isPathWithinRoot } from "(src)/utils/filesystemUtils";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { FileKind } from "(src)/models/interfaces/File";
 import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { ExtendedWebSocket, WebsocketAction } from "(src)/models/interfaces/WebSocketTypes";
 import { AuditLogsService } from "(src)/services/AuditLogsService";
 import { UserRepository } from "(src)/repositories/UserRepository";
+import { config } from "(src)/config/configuration";
 
 const logger = new Logger("Book Service");
-const SESSION_CACHE_TTL_MS = 30_000; // TTL caché de validación de sesión WS
+const SESSION_CACHE_TTL_MS = 30_000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateFilePath(filePath: unknown): filePath is string {
+	if (!filePath || typeof filePath !== "string") return false;
+	const root = config.production.paths.booksRoot;
+	if (!root) return true; // no root configured — skip validation
+	return isPathWithinRoot(filePath, root);
+}
+
+function sanitizePaginationInt(value: unknown, defaultVal: number, min: number, max: number): number {
+	const n = parseInt(String(value ?? defaultVal), 10);
+	if (isNaN(n)) return defaultVal;
+	return Math.min(max, Math.max(min, n));
+}
 
 export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 	const {userId} = ws.session;
@@ -70,6 +85,10 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 			await onSearchTextEvent(ws, messageObj);
 		},
 		"update": async () => {
+			if (!ws.session.isAdmin) {
+				sendMessage(ws, {event: "update", data: {response: false}});
+				return;
+			}
 			await onUpdateEvent(ws, messageObj);
 		},
 		"decompress": async () => {
@@ -109,8 +128,8 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 async function onListEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
 		const parentHash = messageObj.data?.parentHash;
-		const offset = messageObj.data?.offset ?? 0;
-		const limit = messageObj.data?.limit ?? 50;
+		const offset = sanitizePaginationInt(messageObj.data?.offset, 0, 0, 1_000_000);
+		const limit = sanitizePaginationInt(messageObj.data?.limit, 50, 1, 200);
 		const cleanUp = messageObj.data?.cleanUp ?? false;
 		const scanResult = await BooksService.getInstance().getBooksList(offset, limit, cleanUp, parentHash);
 
@@ -131,7 +150,15 @@ async function onSearchEvent(ws: WebSocket, messageObj: { event: string; data: a
 
 async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const audioBook = await AudioFilesService.getInstance().getAudioFiles(messageObj?.data?.filePath);
+		const filePath = messageObj?.data?.filePath;
+
+		if (!validateFilePath(filePath)) {
+			sendMessage(ws, {event: "get_audio_book", data: []});
+			logger.error(`onGetAudioBookEvent: invalid or disallowed path "${filePath}"`);
+			return;
+		}
+
+		const audioBook = await AudioFilesService.getInstance().getAudioFiles(filePath);
 		sendMessage(ws, {event: "get_audio_book", data: audioBook});
 	} catch (error) {
 		logger.error("onGetAudioBookEvent", error);
@@ -140,8 +167,8 @@ async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; d
 
 async function onSearchTextEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const offset = messageObj.data?.offset ?? 0;
-		const limit = messageObj.data?.limit ?? 50;
+		const offset = sanitizePaginationInt(messageObj.data?.offset, 0, 0, 1_000_000);
+		const limit = sanitizePaginationInt(messageObj.data?.limit, 50, 1, 200);
 		const searchText = messageObj.data?.searchText;
 
 		if (!searchText) {
@@ -167,7 +194,15 @@ async function onUpdateEvent(ws: WebSocket, messageObj: { event: string; data: a
 
 async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const extension = messageObj.data.filePath.split(".").pop() ?? "";
+		const filePath = messageObj.data?.filePath;
+
+		if (!validateFilePath(filePath)) {
+			sendMessage(ws, {event: "convert_to_pdf", data: {success: "ERROR", error: "Invalid file path."}});
+			logger.error(`onConvertToPdfEvent: invalid or disallowed path "${filePath}"`);
+			return;
+		}
+
+		const extension = filePath.split(".").pop() ?? "";
 		const dispatch: Record<string, (data: { filePath: string }) => Promise<ConvertToPdfResponse>> = {
 			"epub": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
 			"doc": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
@@ -177,7 +212,6 @@ async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; d
 			"xls": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
 			"xlsx": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
 			"rtf": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			// "txt": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
 			"txt": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
 			"md": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
 			"html": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
@@ -205,8 +239,16 @@ async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; d
 
 async function onDecompressEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
+		const filePath = messageObj?.data?.filePath;
+
+		if (!validateFilePath(filePath)) {
+			sendMessage(ws, {event: "decompress", data: {success: "ERROR", error: "Invalid file path."}});
+			logger.error(`onDecompressEvent: invalid or disallowed path "${filePath}"`);
+			return;
+		}
+
 		const extension = messageObj?.data?.fileKind === FileKind.FILE ?
-			detectCompressionType(messageObj.data.filePath) :
+			detectCompressionType(filePath) :
 			messageObj?.data?.fileKind.toLowerCase();
 
 		const dispatch: Record<string, (data: { filePath: string }) => Promise<DecompressResponse>> = {
@@ -238,7 +280,15 @@ async function onDecompressEvent(ws: WebSocket, messageObj: { event: string; dat
 
 async function onGetMorePagesEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const response = await DecompressService.getInstance().getMorePages(messageObj?.data?.id, messageObj?.data?.index);
+		const id: unknown = messageObj?.data?.id;
+		const index = sanitizePaginationInt(messageObj?.data?.index, 0, 0, 9999);
+
+		if (!id || typeof id !== "string" || !UUID_REGEX.test(id)) {
+			sendMessage(ws, {event: "decompress", data: {success: "ERROR", error: "Invalid ID."}});
+			return;
+		}
+
+		const response = await DecompressService.getInstance().getMorePages(id, index);
 		sendMessage(ws, {event: "decompress", data: {...response}});
 	} catch (error) {
 		logger.error("onGetMorePagesEvent", error);

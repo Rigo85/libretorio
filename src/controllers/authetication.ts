@@ -17,7 +17,7 @@ declare module "express-session" {
 export async function login(req: Request, res: Response): Promise<void> {
 	try {
 		const {email, password} = req.body;
-		logger.info(JSON.stringify(req.body));
+		logger.info(JSON.stringify({email}));
 
 		if (!email?.trim() || !password?.trim() || typeof email !== "string" || typeof password !== "string") {
 			res.status(400).json({error: "Email and password are required."});
@@ -35,7 +35,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 
 		if (!user.isActive) {
 			logger.info(`Login attempt with non-active user: ${email}`);
-			res.status(401).json({error: "User is not active."});
+			res.status(401).json({error: genericErrorMsg});
 			return;
 		}
 

@@ -67,8 +67,8 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 		rolling: true                       // renueva maxAge en cada respuesta
 	});
 
-	app.use(lastActivityMiddleware);
 	app.use(sessionParser);
+	app.use(lastActivityMiddleware);
 	app.use(singleSessionMiddleware);
 	app.use(csrf());
 
@@ -95,7 +95,10 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 
 	app.use(limiter);
 
-	app.use(cors());
+	app.use(cors({
+		origin: process.env.ALLOWED_ORIGIN || "https://libretorio.rji-services.org",
+		credentials: true
+	}));
 	app.use(lusca.xframe("SAMEORIGIN"));
 	app.use(lusca.xssProtection(true));
 
@@ -109,7 +112,18 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 		res.json({csrfToken: req.csrfToken()});
 	});
 
-	app.post("/api/login", login);
+	const loginLimiter = rateLimit({
+		windowMs: 15 * 60 * 1000,
+		limit: 10,
+		standardHeaders: true,
+		legacyHeaders: false,
+		store: new RedisStore({
+			sendCommand: (...args: string[]) => client.sendCommand(args),
+			prefix: "rate-limit:login:"
+		})
+	});
+
+	app.post("/api/login", loginLimiter, login);
 	app.post("/api/logout", logout);
 	app.get("/api/me", currentUser);
 

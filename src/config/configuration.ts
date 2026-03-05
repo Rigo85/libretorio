@@ -19,7 +19,8 @@ export const config = {
 			public: path.join(__dirname, "..", "public"),
 			covers: path.join(__dirname, "..", "public", "covers"),
 			tempCovers: path.join(__dirname, "..", "public", "temp_covers"),
-			cache: path.join(__dirname, "..", "public", "cache")
+			cache: path.join(__dirname, "..", "public", "cache"),
+			booksRoot: process.env.BOOKS_ROOT || ""
 		},
 		websocket: {
 			pingInterval: parseInt(process.env.WS_PING_INTERVAL || "30000"),

@@ -28,6 +28,7 @@ export async function singleSessionMiddleware(req: Request, res: Response, next:
 		next();
 	} catch (error) {
 		logger.error("Error in session validation:", error);
-		next();
+		res.status(503).json({error: "Service temporarily unavailable."});
+		return;
 	}
 }
