@@ -90,7 +90,7 @@ export class AudioFilesService {
 		} catch (error) {
 			logger.error("getAudioFiles", error);
 
-			return undefined;
+			return [];
 		}
 	}
 }
