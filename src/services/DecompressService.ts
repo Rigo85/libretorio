@@ -115,11 +115,11 @@ export class DecompressService {
 			} else {
 				let buf: ArrayBuffer | null = Uint8Array.from(fs.readFileSync(data.filePath)).buffer;
 				let extractor: any = await unrar.createExtractorFromData({data: buf});
-				buf = null; // release raw file buffer ASAP
+				buf = undefined; // release raw file buffer ASAP
 
 				const list = extractor.getFileList();
 				if (!list.fileHeaders) {
-					extractor = null;
+					extractor = undefined;
 					logger.info("Error retrieving the list of files.");
 					return {error: "Error opening Comic/Manga file.", success: "ERROR"};
 				}
@@ -154,7 +154,7 @@ export class DecompressService {
 					;
 				}
 
-				extractor = null; // release extractor after extraction loop
+				extractor = undefined; // release extractor after extraction loop
 
 				await savePagesToFile(pages, data.id);
 
@@ -216,7 +216,7 @@ export class DecompressService {
 					const filePath = path.join(extractPath, file);
 					let imageBuffer: Buffer | null = await sharp(filePath).toBuffer();
 					const base64Image = imageBuffer.toString("base64");
-					imageBuffer = null;
+					imageBuffer = undefined;
 					const base64 = `data:image/${fileExtension.slice(1)};base64,${base64Image}`;
 					pages.push(base64);
 				}

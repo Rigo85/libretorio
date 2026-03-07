@@ -45,7 +45,7 @@ export async function findImagesInDirectory(dir: string): Promise<any[]> {
 						path: fullPath,
 						base64: `data:image/${fileExtension.slice(1)};base64,${base64Image}`
 					});
-					imageBuffer = null;
+					imageBuffer = undefined;
 				} catch (err) {
 					logger.error("Error processing image:", err);
 				}
