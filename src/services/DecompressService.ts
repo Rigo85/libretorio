@@ -113,11 +113,13 @@ export class DecompressService {
 				const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
 				return {pages, success: "OK"};
 			} else {
-				const buf = Uint8Array.from(fs.readFileSync(data.filePath)).buffer;
-				const extractor = await unrar.createExtractorFromData({data: buf});
+				let buf: ArrayBuffer | null = Uint8Array.from(fs.readFileSync(data.filePath)).buffer;
+				let extractor: any = await unrar.createExtractorFromData({data: buf});
+				buf = null; // release raw file buffer ASAP
 
 				const list = extractor.getFileList();
 				if (!list.fileHeaders) {
+					extractor = null;
 					logger.info("Error retrieving the list of files.");
 					return {error: "Error opening Comic/Manga file.", success: "ERROR"};
 				}
@@ -151,6 +153,8 @@ export class DecompressService {
 						}))
 					;
 				}
+
+				extractor = null; // release extractor after extraction loop
 
 				await savePagesToFile(pages, data.id);
 
@@ -210,8 +214,9 @@ export class DecompressService {
 				for (const file of files) {
 					const fileExtension = path.extname(file).toLowerCase();
 					const filePath = path.join(extractPath, file);
-					const imageBuffer = await sharp(filePath).toBuffer();
+					let imageBuffer: Buffer | null = await sharp(filePath).toBuffer();
 					const base64Image = imageBuffer.toString("base64");
+					imageBuffer = null;
 					const base64 = `data:image/${fileExtension.slice(1)};base64,${base64Image}`;
 					pages.push(base64);
 				}

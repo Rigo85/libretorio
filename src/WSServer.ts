@@ -102,6 +102,7 @@ export class WSServer {
 
 		ws.on("error", (error) => {
 			logger.error(`User connection error for ${userId}:`, error);
+			clearInterval(checkInterval);
 		});
 
 		ws.on("close", () => {

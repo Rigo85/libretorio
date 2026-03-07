@@ -39,12 +39,13 @@ export async function findImagesInDirectory(dir: string): Promise<any[]> {
 			const fileExtension = path.extname(file).toLowerCase();
 			if ([".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(fileExtension)) {
 				try {
-					const imageBuffer = await sharp(fullPath).toBuffer();
+					let imageBuffer: Buffer | null = await sharp(fullPath).toBuffer();
 					const base64Image = imageBuffer.toString("base64");
 					images.push({
 						path: fullPath,
 						base64: `data:image/${fileExtension.slice(1)};base64,${base64Image}`
 					});
+					imageBuffer = null;
 				} catch (err) {
 					logger.error("Error processing image:", err);
 				}

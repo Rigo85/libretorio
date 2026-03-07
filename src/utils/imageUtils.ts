@@ -37,7 +37,10 @@ export async function downloadImage(url: string, filepath: string): Promise<void
 				response.data.pipe(writer);
 
 				writer.on("finish", resolve);
-				writer.on("error", reject);
+				writer.on("error", (err) => {
+					response.data.destroy();
+					reject(err);
+				});
 			})
 			.catch((error) => {
 				reject(error);

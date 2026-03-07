@@ -122,7 +122,7 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 		event = "default";
 	}
 
-	eventHandlers[event]();
+	eventHandlers[event]().catch(e => logger.error("Unhandled event error:", e));
 }
 
 async function onListEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
