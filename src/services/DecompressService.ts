@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { Logger } from "(src)/helpers/Logger";
 import { findImagesInDirectory, savePagesToFile } from "(src)/utils/filesystemUtils";
+import * as unrar from "node-unrar-js";
 
 const logger = new Logger("DecompressService");
 
@@ -119,14 +120,31 @@ export class DecompressService {
 					fs.mkdirSync(extractPath);
 				}
 
-				await new Promise<void>((resolve, reject) => {
-					const extraction = extractFull(data.filePath, extractPath, {
-						$bin: require("7zip-bin").path7za
+				let extracted = false;
+				try {
+					await new Promise<void>((resolve, reject) => {
+						const extraction = extractFull(data.filePath, extractPath, {
+							$bin: require("7zip-bin").path7za
+						});
+						extraction.on("end", () => resolve());
+						extraction.on("error", (err: any) => reject(err));
 					});
+					extracted = true;
+				} catch (e7z) {
+					// 7za cannot open this archive (likely RAR5); fall back to node-unrar-js
+					logger.info(`decompressRAR: 7za failed (${e7z.message?.trim()}), falling back to node-unrar-js`);
+				}
 
-					extraction.on("end", () => resolve());
-					extraction.on("error", (err: any) => reject(err));
-				});
+				if (!extracted) {
+					// node-unrar-js fallback (RAR5 / unsupported by 7za)
+					const extractor = await unrar.createExtractorFromFile({
+						filepath: data.filePath,
+						targetPath: extractPath
+					});
+					const {files} = extractor.extract();
+					// Must consume iterator fully to avoid memory leak (per node-unrar-js docs)
+					for (const _file of files) { /* noop — extraction writes to targetPath */ }
+				}
 
 				let images = await findImagesInDirectory(extractPath);
 				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
