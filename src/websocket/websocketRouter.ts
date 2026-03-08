@@ -262,6 +262,7 @@ async function onDecompressEvent(ws: WebSocket, messageObj: { event: string; dat
 		if (dispatch[extension]) {
 			const response = await dispatch[extension](messageObj.data);
 			sendMessage(ws, {event: "decompress", data: {...response}});
+			if (response?.pages) response.pages = undefined;
 		} else {
 			sendMessage(ws, {
 				event: "decompress",
@@ -290,6 +291,7 @@ async function onGetMorePagesEvent(ws: WebSocket, messageObj: { event: string; d
 
 		const response = await DecompressService.getInstance().getMorePages(id, index);
 		sendMessage(ws, {event: "decompress", data: {...response}});
+		if (response?.pages) response.pages = undefined;
 	} catch (error) {
 		logger.error("onGetMorePagesEvent", error);
 

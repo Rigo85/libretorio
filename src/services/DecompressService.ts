@@ -73,6 +73,7 @@ export class DecompressService {
 				fs.rmSync(extractPath, {recursive: true});
 
 				await savePagesToFile(images, data.id);
+				images.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -157,6 +158,7 @@ export class DecompressService {
 				extractor = undefined; // release extractor after extraction loop
 
 				await savePagesToFile(pages, data.id);
+				pages.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -224,6 +226,7 @@ export class DecompressService {
 				fs.rmSync(extractPath, {recursive: true});
 
 				await savePagesToFile(pages, data.id);
+				pages.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -268,6 +271,7 @@ export class DecompressService {
 				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
 
 				await savePagesToFile(images, data.id);
+				images.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
