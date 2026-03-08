@@ -1,8 +1,6 @@
 import fs from "fs-extra";
 import { Logger } from "(src)/helpers/Logger";
 import path from "path";
-import sharp from "sharp";
-
 const logger = new Logger("filesystemUtils");
 
 
@@ -25,35 +23,6 @@ export function checkIfPathExistsAndIsFile(filePath: string): boolean {
 	return false;
 }
 
-export async function findImagesInDirectory(dir: string): Promise<any[]> {
-	let images: any[] = [];
-	const files = fs.readdirSync(dir);
-
-	for (const file of files) {
-		const fullPath = path.join(dir, file);
-		const stat = fs.statSync(fullPath);
-
-		if (stat.isDirectory()) {
-			images = images.concat(await findImagesInDirectory(fullPath));
-		} else {
-			const fileExtension = path.extname(file).toLowerCase();
-			if ([".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(fileExtension)) {
-				try {
-					let imageBuffer: Buffer | null = await sharp(fullPath).toBuffer();
-					const base64Image = imageBuffer.toString("base64");
-					images.push({
-						path: fullPath,
-						base64: `data:image/${fileExtension.slice(1)};base64,${base64Image}`
-					});
-					imageBuffer = undefined;
-				} catch (err) {
-					logger.error("Error processing image:", err);
-				}
-			}
-		}
-	}
-	return images;
-}
 
 /** Collect image file paths recursively without loading image data into memory. */
 export function findImagePathsInDirectory(dir: string): { filePath: string; ext: string }[] {

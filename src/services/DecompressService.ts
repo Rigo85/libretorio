@@ -1,7 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
 import { extractFull } from "node-7z";
-import sharp from "sharp";
 import unzipper from "unzipper";
 import { v4 as uuidv4 } from "uuid";
 import { spawn } from "child_process";

@@ -1,12 +1,5 @@
 import path from "path";
 import fs from "fs-extra";
-import * as unrar from "node-unrar-js";
-import { extractFull } from "node-7z";
-import sharp from "sharp";
-import { exec } from "child_process";
-import util from "util";
-import unzipper from "unzipper";
-import { v4 as uuidv4 } from "uuid";
 import * as mm from "music-metadata";
 import { IAudioMetadata } from "music-metadata";
 
