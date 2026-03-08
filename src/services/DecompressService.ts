@@ -4,10 +4,10 @@ import { extractFull } from "node-7z";
 import sharp from "sharp";
 import unzipper from "unzipper";
 import { v4 as uuidv4 } from "uuid";
+import { spawn } from "child_process";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { Logger } from "(src)/helpers/Logger";
 import { findImagesInDirectory, savePagesToFile } from "(src)/utils/filesystemUtils";
-import * as unrar from "node-unrar-js";
 
 const logger = new Logger("DecompressService");
 
@@ -136,14 +136,13 @@ export class DecompressService {
 				}
 
 				if (!extracted) {
-					// node-unrar-js fallback (RAR5 / unsupported by 7za)
-					const extractor = await unrar.createExtractorFromFile({
-						filepath: data.filePath,
-						targetPath: extractPath
+					// system unrar fallback (RAR5 / unsupported by 7za) — runs as child process,
+					// no WASM heap growth in the main process
+					await new Promise<void>((resolve, reject) => {
+						const proc = spawn("/usr/bin/unrar", ["e", "-y", data.filePath, extractPath + "/"]);
+						proc.on("close", (code) => code === 0 ? resolve() : reject(new Error(`unrar exited with code ${code}`)));
+						proc.on("error", reject);
 					});
-					const {files} = extractor.extract();
-					// Must consume iterator fully to avoid memory leak (per node-unrar-js docs)
-					for (const _file of files) { /* noop — extraction writes to targetPath */ }
 				}
 
 				let images = await findImagesInDirectory(extractPath);
