@@ -55,6 +55,74 @@ export async function findImagesInDirectory(dir: string): Promise<any[]> {
 	return images;
 }
 
+/** Collect image file paths recursively without loading image data into memory. */
+export function findImagePathsInDirectory(dir: string): { filePath: string; ext: string }[] {
+	const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+	let result: { filePath: string; ext: string }[] = [];
+	for (const file of fs.readdirSync(dir)) {
+		const fullPath = path.join(dir, file);
+		if (fs.statSync(fullPath).isDirectory()) {
+			result = result.concat(findImagePathsInDirectory(fullPath));
+		} else {
+			const ext = path.extname(file).toLowerCase();
+			if (IMAGE_EXTS.has(ext)) {
+				result.push({filePath: fullPath, ext});
+			}
+		}
+	}
+	return result;
+}
+
+/**
+ * Stream images from disk to cache files one at a time.
+ * Peak memory ≈ one batch (≤ sizeThreshold) + one image, regardless of archive size.
+ */
+export async function streamImagesToCache(
+	imagePaths: { filePath: string; ext: string }[],
+	id: string,
+	sizeThreshold: number = 10 * 1024 * 1024
+): Promise<void> {
+	const cachePath = path.join(__dirname, "..", "public", "cache", id);
+	fs.mkdirSync(cachePath, {recursive: true});
+
+	const totalPages = imagePaths.length;
+	let fileIndex = 0;
+	let pageIndex = 1;
+	let currentBatch: string[] = [];
+	let currentSize = 0;
+
+	const flushBatch = () => {
+		if (currentBatch.length === 0) return;
+		const cacheFilePath = path.join(cachePath, `${id}_${fileIndex}.cache`);
+		fs.writeFileSync(
+			cacheFilePath,
+			JSON.stringify({pages: currentBatch, pageIndex, currentPagesLength: currentBatch.length, totalPages, index: fileIndex})
+		);
+		pageIndex += currentBatch.length;
+		fileIndex++;
+		currentBatch = [];
+		currentSize = 0;
+	};
+
+	for (const {filePath, ext} of imagePaths) {
+		try {
+			let buf: Buffer | undefined = await sharp(filePath).toBuffer();
+			const base64 = `data:image/${ext.slice(1)};base64,${buf.toString("base64")}`;
+			buf = undefined;
+
+			const pageSize = Buffer.byteLength(base64, "utf8");
+			if (currentSize + pageSize > sizeThreshold && currentBatch.length > 0) {
+				flushBatch();
+			}
+			currentBatch.push(base64);
+			currentSize += pageSize;
+		} catch (err) {
+			logger.error("streamImagesToCache: error processing image:", err);
+		}
+	}
+	flushBatch();
+}
+
 export function savePagesToFile(pages: any[], id: string, sizeThreshold: number = 10 * 1024 * 1024): Promise<void> {
 	try {
 		const cachePath = path.join(__dirname, "..", "public", "cache", id);

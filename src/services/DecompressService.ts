@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { spawn } from "child_process";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { Logger } from "(src)/helpers/Logger";
-import { findImagesInDirectory, savePagesToFile } from "(src)/utils/filesystemUtils";
+import { findImagePathsInDirectory, streamImagesToCache, savePagesToFile } from "(src)/utils/filesystemUtils";
 
 const logger = new Logger("DecompressService");
 
@@ -66,14 +66,12 @@ export class DecompressService {
 					});
 				});
 
-				let images = await findImagesInDirectory(extractPath);
+				const imagePaths = findImagePathsInDirectory(extractPath)
+					.sort((a, b) => a.filePath.localeCompare(b.filePath));
 
-				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
+				await streamImagesToCache(imagePaths, data.id);
 
 				fs.rmSync(extractPath, {recursive: true});
-
-				await savePagesToFile(images, data.id);
-				images.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -132,7 +130,7 @@ export class DecompressService {
 					extracted = true;
 				} catch (e7z) {
 					// 7za cannot open this archive (likely RAR5); fall back to node-unrar-js
-					logger.info(`decompressRAR: 7za failed (${e7z.message?.trim()}), falling back to node-unrar-js`);
+					logger.info(`decompressRAR: 7za failed (${e7z.message?.trim()}), falling back to /usr/bin/unrar`);
 				}
 
 				if (!extracted) {
@@ -145,14 +143,13 @@ export class DecompressService {
 					});
 				}
 
-				let images = await findImagesInDirectory(extractPath);
-				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
+				const imagePaths = findImagePathsInDirectory(extractPath)
+					.sort((a, b) => a.filePath.localeCompare(b.filePath));
+
+				await streamImagesToCache(imagePaths, data.id);
 
 				fs.rmSync(extractPath, {recursive: true});
 				extractPath = "";
-
-				await savePagesToFile(images, data.id);
-				images.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -205,25 +202,12 @@ export class DecompressService {
 						.on("error", reject);
 				});
 
-				const files = fs.readdirSync(extractPath)
-					.filter(file => /\.(jpg|jpeg|png|webp|gif)$/i.test(file))
-					.sort((a, b) => a.localeCompare(b));
+				const imagePaths = findImagePathsInDirectory(extractPath)
+					.sort((a, b) => a.filePath.localeCompare(b.filePath));
 
-				const pages = [] as any[];
-				for (const file of files) {
-					const fileExtension = path.extname(file).toLowerCase();
-					const filePath = path.join(extractPath, file);
-					let imageBuffer: Buffer | null = await sharp(filePath).toBuffer();
-					const base64Image = imageBuffer.toString("base64");
-					imageBuffer = undefined;
-					const base64 = `data:image/${fileExtension.slice(1)};base64,${base64Image}`;
-					pages.push(base64);
-				}
+				await streamImagesToCache(imagePaths, data.id);
 
 				fs.rmSync(extractPath, {recursive: true});
-
-				await savePagesToFile(pages, data.id);
-				pages.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -264,11 +248,10 @@ export class DecompressService {
 				const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
 				return {pages, success: "OK"};
 			} else {
-				let images = await findImagesInDirectory(data.filePath);
-				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
+				const imagePaths = findImagePathsInDirectory(data.filePath)
+					.sort((a, b) => a.filePath.localeCompare(b.filePath));
 
-				await savePagesToFile(images, data.id);
-				images.length = 0; // release base64 strings before re-reading from cache
+				await streamImagesToCache(imagePaths, data.id);
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
