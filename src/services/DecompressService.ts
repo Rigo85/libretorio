@@ -1,6 +1,5 @@
 import path from "path";
 import fs from "fs-extra";
-import * as unrar from "node-unrar-js";
 import { extractFull } from "node-7z";
 import sharp from "sharp";
 import unzipper from "unzipper";
@@ -96,6 +95,7 @@ export class DecompressService {
 	public async decompressRAR(data: { filePath: string; id: string }): Promise<DecompressResponse> {
 		logger.info(`decompressRAR: '${JSON.stringify(data)}'`);
 
+		let extractPath = "";
 		try {
 			if (!data?.filePath) {
 				logger.info("The path to the RAR file has not been provided.");
@@ -114,51 +114,28 @@ export class DecompressService {
 				const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
 				return {pages, success: "OK"};
 			} else {
-				let buf: ArrayBuffer | null = Uint8Array.from(fs.readFileSync(data.filePath)).buffer;
-				let extractor: any = await unrar.createExtractorFromData({data: buf});
-				buf = undefined; // release raw file buffer ASAP
-
-				const list = extractor.getFileList();
-				if (!list.fileHeaders) {
-					extractor = undefined;
-					logger.info("Error retrieving the list of files.");
-					return {error: "Error opening Comic/Manga file.", success: "ERROR"};
+				extractPath = path.join(__dirname, `extracted-${uuidv4()}`);
+				if (!fs.existsSync(extractPath)) {
+					fs.mkdirSync(extractPath);
 				}
 
-				const fileHeaders = [...list.fileHeaders]
-					.filter((fileHeader) => !fileHeader.flags.directory)
-					.filter((fileHeader) => fileHeader.name.endsWith(".jpg") || fileHeader.name.endsWith(".png"))
-					.sort((a, b) => a.name.localeCompare(b.name));
+				await new Promise<void>((resolve, reject) => {
+					const extraction = extractFull(data.filePath, extractPath, {
+						$bin: require("7zip-bin").path7za
+					});
 
-				const pages = [] as any[];
+					extraction.on("end", () => resolve());
+					extraction.on("error", (err: any) => reject(err));
+				});
 
-				for (const fileHeader of fileHeaders) {
-					const extracted = extractor.extract({files: [fileHeader.name]});
+				let images = await findImagesInDirectory(extractPath);
+				images = images.sort((a, b) => a.path.localeCompare(b.path)).map(img => img.base64);
 
-					if (!extracted?.files) {
-						logger.info(`Error extracting the file: "${fileHeader.name}"`);
-						continue;
-					}
+				fs.rmSync(extractPath, {recursive: true});
+				extractPath = "";
 
-					const _pages = [...extracted.files];
-					if (!_pages.length) {
-						logger.info(`No pages have been extracted from the file: "${fileHeader.name}"`);
-						continue;
-					}
-
-					pages.push(..._pages
-						.filter((file) => file.extraction)
-						.map((file) => {
-							const fileExtension = path.extname(file.fileHeader.name).toLowerCase();
-							return `data:image/${fileExtension.slice(1)};base64,${Buffer.from(file.extraction).toString("base64")}`;
-						}))
-					;
-				}
-
-				extractor = undefined; // release extractor after extraction loop
-
-				await savePagesToFile(pages, data.id);
-				pages.length = 0; // release base64 strings before re-reading from cache
+				await savePagesToFile(images, data.id);
+				images.length = 0; // release base64 strings before re-reading from cache
 
 				if (fs.existsSync(cacheFilePath)) {
 					const pages = JSON.parse(fs.readFileSync(cacheFilePath).toString());
@@ -171,9 +148,12 @@ export class DecompressService {
 			logger.error("decompressRAR", error);
 
 			return {success: "ERROR", error: error.message || "Error extracting comic/manga book."};
+		} finally {
+			if (extractPath && fs.existsSync(extractPath)) {
+				fs.rmSync(extractPath, {recursive: true});
+			}
 		}
 	}
-
 	public async decompressZIP(data: { filePath: string; id: string }): Promise<DecompressResponse> {
 		logger.info(`decompressZIP: '${JSON.stringify(data)}'`);
 
