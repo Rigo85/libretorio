@@ -106,7 +106,8 @@ export async function streamImagesToCache(
 
 	for (const {filePath, ext} of imagePaths) {
 		try {
-			let buf: Buffer | undefined = await sharp(filePath).toBuffer();
+			// Read raw bytes — no libvips decode/re-encode; browsers handle jpg/png/webp/gif natively
+			let buf: Buffer | undefined = await fs.promises.readFile(filePath);
 			const base64 = `data:image/${ext.slice(1)};base64,${buf.toString("base64")}`;
 			buf = undefined;
 
