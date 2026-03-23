@@ -22,68 +22,86 @@ export class AudioFilesService {
 		return AudioFilesService.instance;
 	}
 
+	/* eslint-disable @typescript-eslint/naming-convention */
+	private readonly mimeMapper: Record<string, string> = {
+		".mp3": "audio/mpeg",
+		".wav": "audio/wav",
+		".m4a": "audio/mp4",
+		".m4b": "audio/mp4",
+		".ogg": "audio/ogg",
+		".flac": "audio/flac"
+	};
+	/* eslint-enable @typescript-eslint/naming-convention */
+
+	private readonly validExtensions = [".mp3", ".wav", ".m4a", ".m4b", ".ogg", ".flac"];
+
 	public async getAudioFiles(filePath: string): Promise<AudioBookMetadata[]> {
-		// logger.info(`getAudioFiles: '${filePath}'`);
 		try {
-			const validExtensions = [".mp3", ".wav", ".m4a", ".m4b", ".ogg", ".flac"];
-
-			/* eslint-disable @typescript-eslint/naming-convention */
-			const mapper: Record<string, string> = {
-				".mp3": "audio/mpeg",
-				".wav": "audio/wav",
-				".m4a": "audio/mp4",
-				".m4b": "audio/mp4",
-				".ogg": "audio/ogg",
-				".flac": "audio/flac"
-			};
-			/* eslint-enable @typescript-eslint/naming-convention */
-
 			const dirents = await fs.readdir(filePath, {withFileTypes: true});
 			const audioFiles = dirents
 				.filter(dirent => dirent.isFile())
-				.filter(dirent => validExtensions.includes(path.extname(dirent.name).toLowerCase()))
+				.filter(dirent => this.validExtensions.includes(path.extname(dirent.name).toLowerCase()))
 				.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
 			;
 
 			const audioMetadataPromises = audioFiles.map(async (dirent) => {
-				const extension = path.extname(dirent.name).toLowerCase();
 				const filePathResolved = path.resolve(filePath, dirent.name);
-
-				let length = 0;
-				let chapters: AudioChapter[] | undefined;
-				try {
-					const metadata: IAudioMetadata = await mm.parseFile(
-						filePathResolved, {duration: true, skipCovers: true, includeChapters: true})
-					;
-					// logger.info(`path: "${filePathResolved}" -  metadata: ${JSON.stringify(metadata)}`);
-					length = metadata.format.duration ?? 0;
-					if ([".m4b", ".m4a"].includes(extension) && metadata.format.chapters?.length) {
-						const sampleRate = metadata.format.sampleRate ?? 44100;
-						chapters = metadata.format.chapters.map(ch => ({
-							title: ch.title,
-							startTimeInSeconds: ch.sampleOffset / sampleRate
-						}));
-					}
-				} catch (error) {
-					logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
-				}
-
-				// logger.info(`Audio file: "${dirent.name}" - ${length} seconds - formatted: ${formatTime(length)}`);
-
-				return {
-					title: dirent.name,
-					src: filePathResolved,
-					type: mapper[extension] ?? "audio/mpeg",
-					length: formatTime(length),
-					chapters
-				};
+				return this.parseAudioFile(filePathResolved, dirent.name);
 			});
 
 			return await Promise.all(audioMetadataPromises);
 		} catch (error) {
 			logger.error("getAudioFiles", error);
-
 			return [];
 		}
+	}
+
+	public async getAudioFile(filePath: string): Promise<AudioBookMetadata[]> {
+		try {
+			const fileName = path.basename(filePath);
+			const extension = path.extname(fileName).toLowerCase();
+
+			if (!this.validExtensions.includes(extension)) {
+				logger.error(`getAudioFile: unsupported extension "${extension}" for "${filePath}"`);
+				return [];
+			}
+
+			const filePathResolved = path.resolve(filePath);
+			const track = await this.parseAudioFile(filePathResolved, fileName);
+			return [track];
+		} catch (error) {
+			logger.error("getAudioFile", error);
+			return [];
+		}
+	}
+
+	private async parseAudioFile(filePathResolved: string, fileName: string): Promise<AudioBookMetadata> {
+		const extension = path.extname(fileName).toLowerCase();
+		let length = 0;
+		let chapters: AudioChapter[] | undefined;
+
+		try {
+			const metadata: IAudioMetadata = await mm.parseFile(
+				filePathResolved, {duration: true, skipCovers: true, includeChapters: true})
+			;
+			length = metadata.format.duration ?? 0;
+			if ([".m4b", ".m4a"].includes(extension) && metadata.format.chapters?.length) {
+				const sampleRate = metadata.format.sampleRate ?? 44100;
+				chapters = metadata.format.chapters.map(ch => ({
+					title: ch.title,
+					startTimeInSeconds: ch.sampleOffset / sampleRate
+				}));
+			}
+		} catch (error) {
+			logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
+		}
+
+		return {
+			title: fileName,
+			src: filePathResolved,
+			type: this.mimeMapper[extension] ?? "audio/mpeg",
+			length: formatTime(length),
+			chapters
+		};
 	}
 }

@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import fs from "fs-extra";
 
 import { Logger } from "(src)/helpers/Logger";
 import { BooksService } from "(src)/services/BooksService";
@@ -158,7 +159,10 @@ async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; d
 			return;
 		}
 
-		const audioBook = await AudioFilesService.getInstance().getAudioFiles(filePath);
+		const stat = await fs.stat(filePath);
+		const audioBook = stat.isDirectory()
+			? await AudioFilesService.getInstance().getAudioFiles(filePath)
+			: await AudioFilesService.getInstance().getAudioFile(filePath);
 		sendMessage(ws, {event: "get_audio_book", data: audioBook});
 	} catch (error) {
 		logger.error("onGetAudioBookEvent", error);
