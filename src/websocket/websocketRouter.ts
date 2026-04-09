@@ -6,10 +6,10 @@ import { BooksService } from "(src)/services/BooksService";
 import { OpenLibraryService } from "(src)/services/OpenLibraryService";
 import { AudioFilesService } from "(src)/services/AudioFilesService";
 import { ConversionService } from "(src)/services/ConversionService";
-import { DecompressService } from "(src)/services/DecompressService";
-import { detectCompressionType, isPathWithinRoot } from "(src)/utils/filesystemUtils";
+import { ComicCacheReaderService } from "(src)/services/ComicCacheReaderService";
+import { CacheArtifactStateRepository } from "(src)/repositories/CacheArtifactStateRepository";
+import { isPathWithinRoot } from "(src)/utils/filesystemUtils";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
-import { FileKind } from "(src)/models/interfaces/File";
 import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { ExtendedWebSocket, WebsocketAction } from "(src)/models/interfaces/WebSocketTypes";
 import { AuditLogsService } from "(src)/services/AuditLogsService";
@@ -243,36 +243,29 @@ async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; d
 
 async function onDecompressEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
 	try {
-		const filePath = messageObj?.data?.filePath;
+		const coverId = messageObj?.data?.id;
 
-		if (!validateFilePath(filePath)) {
-			sendMessage(ws, {event: "decompress", data: {success: "ERROR", error: "Invalid file path."}});
-			logger.error(`onDecompressEvent: invalid or disallowed path "${filePath}"`);
+		if (!coverId || typeof coverId !== "string" || !UUID_REGEX.test(coverId)) {
+			sendMessage(ws, {event: "decompress", data: {success: "ERROR", error: "Invalid ID."}});
 			return;
 		}
 
-		const extension = messageObj?.data?.fileKind === FileKind.FILE ?
-			detectCompressionType(filePath) :
-			messageObj?.data?.fileKind.toLowerCase();
-
-		const dispatch: Record<string, (data: { filePath: string }) => Promise<DecompressResponse>> = {
-			"cb7": DecompressService.getInstance().decompressCB7.bind(DecompressService.getInstance()),
-			"cbr": DecompressService.getInstance().decompressRAR.bind(DecompressService.getInstance()),
-			"cbz": DecompressService.getInstance().decompressZIP.bind(DecompressService.getInstance()),
-			// eslint-disable-next-line @typescript-eslint/naming-convention
-			"comic-manga": DecompressService.getInstance().gettingComicMangaImages.bind(DecompressService.getInstance())
-		};
-
-		if (dispatch[extension]) {
-			const response = await dispatch[extension](messageObj.data);
-			sendMessage(ws, {event: "decompress", data: {...response}});
-			if (response?.pages) response.pages = undefined;
-		} else {
+		const readerReady = await CacheArtifactStateRepository.getInstance().isReaderReady(coverId);
+		if (!readerReady) {
 			sendMessage(ws, {
 				event: "decompress",
-				data: {success: "ERROR", error: "An error has occurred. Invalid file extension kind."}
+				data: {
+					success: "ERROR",
+					code: "COMIC_CACHE_MISSING",
+					error: "This file is download-only."
+				}
 			});
+			return;
 		}
+
+		const response = await ComicCacheReaderService.getInstance().getInitialPages(coverId);
+		sendMessage(ws, {event: "decompress", data: {...response}});
+		if (response?.pages) response.pages = undefined;
 	} catch (error) {
 		logger.error("onDecompressEvent", error);
 
@@ -293,7 +286,7 @@ async function onGetMorePagesEvent(ws: WebSocket, messageObj: { event: string; d
 			return;
 		}
 
-		const response = await DecompressService.getInstance().getMorePages(id, index);
+		const response = await ComicCacheReaderService.getInstance().getMorePages(id, index);
 		sendMessage(ws, {event: "decompress", data: {...response}});
 		if (response?.pages) response.pages = undefined;
 	} catch (error) {

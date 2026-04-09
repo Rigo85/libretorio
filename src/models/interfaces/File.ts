@@ -3,6 +3,7 @@ export enum FileKind {
 	FILE = "FILE",
 	COMIC_MANGA = "COMIC-MANGA",
 	EPUB = "EPUB",
+	AUDIOBOOK = "AUDIOBOOK",
 	NONE = "NONE"
 	/* eslint-enable @typescript-eslint/naming-convention */
 }
@@ -18,4 +19,5 @@ export interface File {
 	webDetails?: string;
 	customDetails?: boolean;
 	fileKind: FileKind;
+	comicReaderReady?: boolean;
 }

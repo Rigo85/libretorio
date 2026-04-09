@@ -1,6 +1,7 @@
 export interface DecompressResponse {
 	success: "OK" | "ERROR";
 	error?: string;
+	code?: string;
 	pages?: DecompressPages;
 }
 

@@ -47,8 +47,16 @@ export class FileRepository {
 	public async findAllByHashWithCount(parentHash: string, offset: number, limit: number): Promise<{ files: File[]; total: number }> {
 		try {
 			const query = `
-                SELECT *, COUNT(*) OVER() AS total_count
+                SELECT
+                    a.*,
+                    CASE
+                        WHEN a."fileKind" = 'COMIC-MANGA' THEN cas.reader_ready
+                        WHEN a."fileKind" = 'FILE' AND lower(a.name) ~ '\\.(cbr|cbz|cb7|cbt)$' THEN cas.reader_ready
+                        ELSE NULL
+                    END AS "comicReaderReady",
+                    COUNT(*) OVER() AS total_count
                 FROM archive a
+                LEFT JOIN cache_artifact_state cas ON cas.cover_id = a."coverId"
                 WHERE a."parentHash" = $1
                 ORDER BY a.id ASC
                 OFFSET $2 LIMIT $3
@@ -60,7 +68,7 @@ export class FileRepository {
 
 			const total = parseInt(rows[0].total_count, 10);
 			// eslint-disable-next-line @typescript-eslint/naming-convention
-			const files = rows.map(({total_count, ...file}: any) => file as File);
+			const files = rows.map(({total_count, ...file}: any) => FileRepository.mapRowToFile(file));
 
 			return {files, total};
 		} catch (error) {
@@ -73,13 +81,21 @@ export class FileRepository {
 	public async findAllByTextWithCount(searchText: string, offset: number, limit: number): Promise<{ files: File[]; total: number }> {
 		try {
 			const query = `
-                SELECT *, COUNT(*) OVER() AS total_count
-                FROM archive
-                WHERE name ILIKE '%' || $1 || '%'
-                   OR ("localDetails" IS NOT NULL
-                  AND "localDetails"::text ILIKE '%' || $1 || '%')
-                   OR ("webDetails" IS NOT NULL
-                  AND "webDetails"::text ILIKE '%' || $1 || '%')
+                SELECT
+                    a.*,
+                    CASE
+                        WHEN a."fileKind" = 'COMIC-MANGA' THEN cas.reader_ready
+                        WHEN a."fileKind" = 'FILE' AND lower(a.name) ~ '\\.(cbr|cbz|cb7|cbt)$' THEN cas.reader_ready
+                        ELSE NULL
+                    END AS "comicReaderReady",
+                    COUNT(*) OVER() AS total_count
+                FROM archive a
+                LEFT JOIN cache_artifact_state cas ON cas.cover_id = a."coverId"
+                WHERE a.name ILIKE '%' || $1 || '%'
+                   OR (a."localDetails" IS NOT NULL
+                  AND a."localDetails"::text ILIKE '%' || $1 || '%')
+                   OR (a."webDetails" IS NOT NULL
+                  AND a."webDetails"::text ILIKE '%' || $1 || '%')
                 OFFSET $2 LIMIT $3
 			`;
 			const values = [searchText, offset, limit];
@@ -89,7 +105,7 @@ export class FileRepository {
 
 			const total = parseInt(rows[0].total_count, 10);
 			// eslint-disable-next-line @typescript-eslint/naming-convention
-			const files = rows.map(({total_count, ...file}: any) => file as File);
+			const files = rows.map(({total_count, ...file}: any) => FileRepository.mapRowToFile(file));
 
 			return {files, total};
 		} catch (error) {
@@ -97,5 +113,15 @@ export class FileRepository {
 
 			return {files: [], total: 0};
 		}
+	}
+
+	private static mapRowToFile(row: any): File {
+		const file = row as File;
+
+		if (typeof file.comicReaderReady !== "boolean") {
+			delete file.comicReaderReady;
+		}
+
+		return file;
 	}
 }
