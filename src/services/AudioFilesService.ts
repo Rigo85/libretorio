@@ -1,11 +1,20 @@
 import path from "path";
 import fs from "fs-extra";
-import * as mm from "music-metadata";
-import { IAudioMetadata } from "music-metadata";
 
 import { Logger } from "(src)/helpers/Logger";
 import { AudioBookMetadata, AudioChapter } from "(src)/models/interfaces/AudioBookMetadata";
 import { formatTime } from "(src)/utils/datetimeUtils";
+import { PostgresAdapter } from "(src)/db/PostgresAdapter";
+import { realpath, stat } from "fs/promises";
+
+interface PreparedAudio {
+	relativePath: string;
+	signature: string;
+	status: AudioBookMetadata["metadataStatus"];
+	duration: number;
+	chapters: AudioChapter[];
+	details?: {format?: string; codec?: string};
+}
 
 const logger = new Logger("AudioFilesService");
 
@@ -22,17 +31,6 @@ export class AudioFilesService {
 		return AudioFilesService.instance;
 	}
 
-	/* eslint-disable @typescript-eslint/naming-convention */
-	private readonly mimeMapper: Record<string, string> = {
-		".mp3": "audio/mpeg",
-		".wav": "audio/wav",
-		".m4a": "audio/mp4",
-		".m4b": "audio/mp4",
-		".ogg": "audio/ogg",
-		".flac": "audio/flac"
-	};
-	/* eslint-enable @typescript-eslint/naming-convention */
-
 	private readonly validExtensions = [".mp3", ".wav", ".m4a", ".m4b", ".ogg", ".flac"];
 
 	public async getAudioFiles(filePath: string): Promise<AudioBookMetadata[]> {
@@ -44,12 +42,13 @@ export class AudioFilesService {
 				.sort((a, b) => a.name.toLocaleLowerCase().localeCompare(b.name.toLocaleLowerCase()))
 			;
 
+			const prepared = await this.loadPrepared(filePath);
 			const audioMetadataPromises = audioFiles.map(async (dirent) => {
 				const filePathResolved = path.resolve(filePath, dirent.name);
-				return this.parseAudioFile(filePathResolved, dirent.name);
+				return this.preparedTrack(filePathResolved, dirent.name, prepared.rows.get(dirent.name), prepared.available);
 			});
 
-			return await Promise.all(audioMetadataPromises);
+			return (await Promise.all(audioMetadataPromises)).filter((track): track is AudioBookMetadata => !!track);
 		} catch (error) {
 			logger.error("getAudioFiles", error);
 			return [];
@@ -67,41 +66,68 @@ export class AudioFilesService {
 			}
 
 			const filePathResolved = path.resolve(filePath);
-			const track = await this.parseAudioFile(filePathResolved, fileName);
-			return [track];
+			const prepared = await this.loadPrepared(filePathResolved);
+			const track = await this.preparedTrack(filePathResolved, fileName, prepared.rows.get(""), prepared.available);
+			return track ? [track] : [];
 		} catch (error) {
 			logger.error("getAudioFile", error);
 			return [];
 		}
 	}
 
-	private async parseAudioFile(filePathResolved: string, fileName: string): Promise<AudioBookMetadata> {
-		const extension = path.extname(fileName).toLowerCase();
-		let length = 0;
-		let chapters: AudioChapter[] | undefined;
-
+	private async loadPrepared(filePath: string): Promise<{available: boolean; rows: Map<string, PreparedAudio>}> {
 		try {
-			const metadata: IAudioMetadata = await mm.parseFile(
-				filePathResolved, {duration: true, skipCovers: true, includeChapters: true})
-			;
-			length = metadata.format.duration ?? 0;
-			if ([".m4b", ".m4a"].includes(extension) && metadata.format.chapters?.length) {
-				const sampleRate = metadata.format.sampleRate ?? 44100;
-				chapters = metadata.format.chapters.map(ch => ({
-					title: ch.title,
-					startTimeInSeconds: ch.sampleOffset / sampleRate
-				}));
-			}
+			const {rows} = await PostgresAdapter.getInstance().pool.query<PreparedAudio>(`
+                SELECT m.relative_path AS "relativePath",m.source_signature AS signature,m.status,
+                    m.duration_seconds AS duration,m.chapters,m.details
+                FROM audio_metadata m JOIN archive a ON a.id=m.archive_id
+                WHERE a."parentPath"=$1 AND a.name=$2`, [path.dirname(filePath), path.basename(filePath)]);
+			return {available: true, rows: new Map(rows.map(row => [row.relativePath, row]))};
 		} catch (error) {
-			logger.error(`Could not read metadata for file: "${filePathResolved}"`, error);
+			logger.error("Prepared audio metadata unavailable", error.message);
+			return {available: false, rows: new Map()};
 		}
+	}
 
-		return {
-			title: fileName,
-			src: filePathResolved,
-			type: this.mimeMapper[extension] ?? "audio/mpeg",
-			length: formatTime(length),
-			chapters
-		};
+	private async preparedTrack(source: string, name: string, metadata: PreparedAudio | undefined, available: boolean): Promise<AudioBookMetadata | undefined> {
+		const track: AudioBookMetadata = {title: name, src: source, type: "",
+			length: formatTime(0), metadataStatus: available ? "pending" : "unavailable"};
+		try {
+			const resolved = await realpath(source);
+			const info = await stat(resolved, {bigint: true});
+			if (!info.isFile()) return undefined;
+			if (!metadata) return track;
+			// This identity must match the scanner; no parsing, hashing or DB writes here.
+			const signature = JSON.stringify([resolved, info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String));
+			if (signature !== metadata.signature) return {...track, metadataStatus: "stale"};
+			if (metadata.status === "skipped") return undefined;
+			track.metadataStatus = metadata.status;
+			if (metadata.status === "ready" || metadata.status === "needs_review") {
+				const duration = Number(metadata.duration);
+				if (Number.isFinite(duration) && duration > 0) {
+					track.durationSeconds = duration;
+					track.length = formatTime(duration);
+				}
+				track.chapters = Array.isArray(metadata.chapters) ? metadata.chapters : [];
+				track.type = this.preparedMime(metadata.details?.format);
+			}
+			return track;
+		} catch (error) {
+			logger.error("Audio track unavailable", {source, error: error.message});
+			return undefined;
+		}
+	}
+
+	private preparedMime(format = ""): string {
+		const formats = format.split(",");
+		// ffprobe's shared Matroska/WebM demuxer does not identify a specific MIME.
+		if (formats.includes("matroska")) return "";
+		if (formats.includes("webm")) return "audio/webm";
+		if (formats.includes("mov") || formats.includes("mp4")) return "audio/mp4";
+		if (formats.includes("mp3")) return "audio/mpeg";
+		if (formats.includes("wav")) return "audio/wav";
+		if (formats.includes("ogg")) return "audio/ogg";
+		if (formats.includes("flac")) return "audio/flac";
+		return "";
 	}
 }

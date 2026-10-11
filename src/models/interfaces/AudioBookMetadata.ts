@@ -1,6 +1,7 @@
 export interface AudioChapter {
 	title: string;
 	startTimeInSeconds: number;
+	endTimeInSeconds?: number;
 }
 
 export interface AudioBookMetadata {
@@ -9,4 +10,6 @@ export interface AudioBookMetadata {
 	type: string;
 	length: string;
 	chapters?: AudioChapter[];
+	durationSeconds?: number;
+	metadataStatus?: "ready" | "needs_review" | "failed" | "pending" | "processing" | "stale" | "unavailable" | "skipped";
 }

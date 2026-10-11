@@ -133,11 +133,14 @@ async function onSearchEvent(ws: WebSocket, messageObj: { event: string; data: a
 }
 
 async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
+	const requestId = typeof messageObj.data?.requestId === "string" && /^[a-zA-Z0-9-]{1,64}$/.test(messageObj.data.requestId)
+		? messageObj.data.requestId : undefined;
+	const reply = (data: unknown[], code?: string) => sendMessage(ws, {event: "get_audio_book", data, requestId, code});
 	try {
 		const filePath = messageObj?.data?.filePath;
 
 		if (!await validateFilePath(filePath)) {
-			sendMessage(ws, {event: "get_audio_book", data: []});
+			reply([], "AUDIO_UNAVAILABLE");
 			logger.error(`onGetAudioBookEvent: invalid or disallowed path "${filePath}"`);
 			return;
 		}
@@ -146,9 +149,10 @@ async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; d
 		const audioBook = stat.isDirectory()
 			? await AudioFilesService.getInstance().getAudioFiles(filePath)
 			: await AudioFilesService.getInstance().getAudioFile(filePath);
-		sendMessage(ws, {event: "get_audio_book", data: audioBook});
+		reply(audioBook);
 	} catch (error) {
 		logger.error("onGetAudioBookEvent", error);
+		reply([], "AUDIO_UNAVAILABLE");
 	}
 }
 
