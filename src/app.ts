@@ -18,6 +18,9 @@ import { currentUser, login, logout } from "(src)/controllers/authetication";
 import RedisAdapter from "(src)/db/RedisAdapter";
 import { singleSessionMiddleware } from "(src)/middlewares/singleSessionMiddleware";
 import { lastActivityMiddleware } from "(src)/middlewares/lastActivityMiddleware";
+import { libraryFilesMiddleware } from "(src)/middlewares/libraryFilesMiddleware";
+import { appStaticMiddleware } from "(src)/middlewares/appStaticMiddleware";
+import { sessionActivity } from "(src)/controllers/sessionActivity";
 
 export async function bootstrap(): Promise<{ app: express.Express; sessionParser: any }> {
 	const logger = new Logger("App");
@@ -53,7 +56,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.use(express.urlencoded({extended: true}));
 
 	const sessionParser = session({
-		store: new pgStore({pool: PostgresAdapter.getInstance().pool}),
+		store: new pgStore({pool: PostgresAdapter.getInstance().pool, disableTouch: true}),
 		secret: config.production.server.sessionSecret,
 		resave: false,
 		saveUninitialized: false,
@@ -64,13 +67,13 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 			sameSite: "lax",
 			maxAge: 1 * 60 * 60 * 1000       // 1 horas
 		},
-		rolling: true                       // renueva maxAge en cada respuesta
+		rolling: false                      // Solo actividad aceptada modifica y renueva la sesion.
 	});
 
 	app.use(sessionParser);
-	app.use(lastActivityMiddleware);
 	app.use(singleSessionMiddleware);
 	app.use(csrf());
+	app.use(lastActivityMiddleware);
 
 	const client = await RedisAdapter.initialize();
 
@@ -103,12 +106,18 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.use(lusca.xssProtection(true));
 
 	app.set("port", config.production.server.port);
-	app.use(express.static(path.join(__dirname, "public"), {maxAge: 31557600000}));
+	app.use(libraryFilesMiddleware(
+		path.join(__dirname, "public"),
+		`${path.dirname(__dirname)}-Scanner/dist/public/books`
+	));
+	app.use(appStaticMiddleware(path.join(__dirname, "public")));
 
 	app.use("/covers", express.static(path.join(__dirname, "public/covers"), {fallthrough: false}));
 	app.use("/temp_covers", express.static(path.join(__dirname, "public/temp_covers"), {fallthrough: false}));
 
 	app.get("/api/csrf-token", async (req: Request, res: Response) => {
+		res.setHeader("Cache-Control", "private, no-store");
+		res.vary("Cookie");
 		res.json({csrfToken: req.csrfToken()});
 	});
 
@@ -126,10 +135,12 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.post("/api/login", loginLimiter, login);
 	app.post("/api/logout", logout);
 	app.get("/api/me", currentUser);
+	app.post("/api/session/activity", sessionActivity);
 
-	app.get("/*", (_req, res) =>
-		res.sendFile(path.join(__dirname, "public", "index.html"))
-	);
+	app.get("/*", (_req, res) => {
+		res.setHeader("Cache-Control", "no-cache");
+		res.sendFile(path.join(__dirname, "public", "index.html"));
+	});
 
 	return {app, sessionParser};
 }

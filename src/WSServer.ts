@@ -5,6 +5,9 @@ import { Logger } from "(src)/helpers/Logger";
 import { onMessageEvent } from "(src)/websocket/websocketRouter";
 import { config } from "(src)/config/configuration";
 import { ExtendedWebSocket, SessionRequest, WSServerConfig } from "(src)/models/interfaces/WebSocketTypes";
+import { UserRepository } from "(src)/repositories/UserRepository";
+import { validateSession } from "(src)/websocket/validateSession";
+import { sessionRevocations } from "(src)/services/SessionRevocation";
 
 const logger = new Logger("WS Server");
 
@@ -12,6 +15,13 @@ export class WSServer {
 	private wss: WebSocketServer;
 	private readonly server: http.Server;
 	private heartbeatInterval: NodeJS.Timeout | undefined = undefined;
+	private revokeSession = (sid: string): void => {
+		for (const socket of this.wss.clients) {
+			if ((socket as ExtendedWebSocket).sessionID !== sid) continue;
+			if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({event: "session_expired", data: {message: "Your session is no longer valid."}}));
+			socket.close(1008, "Session revoked");
+		}
+	};
 	private readonly config: Required<WSServerConfig>;
 
 	constructor(app: Express, sessionParser: any, wsServerConfig: WSServerConfig = {}) {
@@ -22,7 +32,8 @@ export class WSServer {
 		};
 
 		this.server = http.createServer(app);
-		this.wss = new WebSocketServer({noServer: true});
+		this.wss = new WebSocketServer({noServer: true, maxPayload: 1024 * 1024});
+		sessionRevocations.on("revoked", this.revokeSession);
 
 		this.setupServerEvents(sessionParser);
 	}
@@ -30,11 +41,13 @@ export class WSServer {
 	private setupServerEvents(sessionParser: any): void {
 		this.server.on("upgrade", async (req: SessionRequest, socket, head) => {
 			logger.info("WebSocket upgrade request received.");
+			const upgradeTimeout = setTimeout(() => socket.destroy(), this.config.upgradeTimeout);
 			try {
-				const upgradeTimeout = setTimeout(() => {
+				if (req.headers.origin !== (process.env.ALLOWED_ORIGIN || "https://libretorio.rji-services.org")) {
+					socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
 					socket.destroy();
-					logger.error("WebSocket upgrade timeout exceeded.");
-				}, this.config.upgradeTimeout);
+					return;
+				}
 
 				await new Promise<void>((resolve, reject) => {
 					sessionParser(req as any, {} as any, (err: Error | null) => {
@@ -43,31 +56,38 @@ export class WSServer {
 					});
 				});
 
-				clearTimeout(upgradeTimeout);
-
-				if (!req.session?.userId) {
+				const current = req.session?.userId && req.sessionID
+					? await UserRepository.getInstance().getWebSocketSession(req.session.userId, req.sessionID)
+					: undefined;
+				if (!current || (current.lastActivity !== undefined && Date.now() - current.lastActivity > 60 * 60 * 1000)) {
 					logger.error(`Unauthorized connection attempt from ${req.socket.remoteAddress}.`);
 					socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
 					socket.destroy();
 					return;
 				}
+				if (socket.destroyed) return;
 
 				this.wss.handleUpgrade(req, socket, head, (ws) => {
 					const extWs = ws as ExtendedWebSocket;
 					extWs.session = req.session!;
+					extWs.session.isAdmin = current.isAdmin;
+					extWs.sessionID = req.sessionID!;
 					extWs.isAlive = true;
 					this.wss.emit("connection", extWs, req);
 				});
 			} catch (error: any) {
 				logger.error(`Error during WebSocket upgrade: ${error.message}`);
-				socket.write("HTTP/1.1 500 Internal Server Error\r\n\r\n");
+				if (!socket.destroyed) socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
 				socket.destroy();
+			} finally {
+				clearTimeout(upgradeTimeout);
 			}
 		});
 
 		this.wss.on("connection", this.handleConnection.bind(this));
 
 		this.wss.on("close", () => {
+			sessionRevocations.off("revoked", this.revokeSession);
 			this.clearHeartbeat();
 		});
 	}
@@ -78,21 +98,14 @@ export class WSServer {
 
 		ws.lastActivityTime = Date.now();
 
-		const checkInterval = setInterval(() => {
-			// logger.info(`Checking activity: last = ${new Date(ws.lastActivityTime)},
-			// difference = ${(Date.now() - ws.lastActivityTime) / 1000 / 60} minutes`);
-
-			if (!ws.lastActivityTime ||
-				Date.now() - ws.lastActivityTime > 1 * 60 * 60 * 1000) { // 1 hour
-
-				logger.info(`Closing connection of '${ws.session.userId}' due to inactivity`);
-				ws.send(JSON.stringify({
-					event: "session_expired",
-					data: {message: "Your session has expired due to inactivity."}
-				}));
-
-				clearInterval(checkInterval);
-				ws.close();
+		let checking = false;
+		const checkInterval = setInterval(async () => {
+			if (checking || ws.readyState !== WebSocket.OPEN) return;
+			checking = true;
+			try {
+				if (!await validateSession(ws)) clearInterval(checkInterval);
+			} finally {
+				checking = false;
 			}
 		}, 30000);
 
@@ -110,18 +123,27 @@ export class WSServer {
 			clearInterval(checkInterval);
 		});
 
-		ws.on("message", async (message) => {
-			try {
-				const msgData = JSON.parse(message.toString());
-				if (msgData.event && msgData.event !== "pong" && msgData.event !== "ping") {
-					ws.lastActivityTime = Date.now();
-					// logger.info(`Updating lastActivityTime for user ${ws.session.userId}`);
-				}
-			} catch (e) {
-				// logger.info("Non-JSON message received, not updating lastActivityTime");
+		let activeMessages = 0;
+		let messagesInWindow = 0;
+		let windowStart = Date.now();
+		ws.on("message", async (message, isBinary) => {
+			if (Date.now() - windowStart >= 60_000) {
+				windowStart = Date.now();
+				messagesInWindow = 0;
 			}
-
-			await onMessageEvent(message, ws);
+			if (isBinary || ++messagesInWindow > 120 || activeMessages >= 4) {
+				ws.close(1008, "Message limit exceeded");
+				return;
+			}
+			activeMessages++;
+			try {
+				await onMessageEvent(message, ws);
+			} catch (error) {
+				logger.error("WebSocket message failed", error);
+				ws.close(1011, "Message failed");
+			} finally {
+				activeMessages--;
+			}
 		});
 	}
 

@@ -10,9 +10,8 @@ export interface SessionData {
 export interface ExtendedWebSocket extends WebSocket {
 	isAlive: boolean;
 	session: SessionData;
+	sessionID: string;
 	lastActivityTime: number;
-	cachedSessionId?: string;
-	sessionCacheExpiry?: number;
 }
 
 export interface WSServerConfig {
@@ -23,6 +22,7 @@ export interface WSServerConfig {
 
 export interface SessionRequest extends http.IncomingMessage {
 	session?: SessionData;
+	sessionID?: string;
 }
 
 export type WebsocketAction =

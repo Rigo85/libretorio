@@ -3,6 +3,7 @@ import { UserRepository } from "(src)/repositories/UserRepository";
 import { UserLoginRepository } from "(src)/repositories/UserLoginRepository";
 import { verify } from "@node-rs/argon2";
 import { Logger } from "(src)/helpers/Logger";
+import { SessionData } from "(src)/models/interfaces/WebSocketTypes";
 // import { getIpAddress } from "(src)/utils/ipUtils";
 
 const logger = new Logger("Authentication");
@@ -19,7 +20,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 		const {email, password} = req.body;
 		logger.info(JSON.stringify({email}));
 
-		if (!email?.trim() || !password?.trim() || typeof email !== "string" || typeof password !== "string") {
+		if (typeof email !== "string" || typeof password !== "string" || !email.trim() || !password.trim()) {
 			res.status(400).json({error: "Email and password are required."});
 			return;
 		}
@@ -46,10 +47,20 @@ export async function login(req: Request, res: Response): Promise<void> {
 			return;
 		}
 
-		await UserRepository.getInstance().updateSessionId(user.id, req.sessionID);
+		await new Promise<void>((resolve, reject) => {
+			req.session.regenerate(err => err ? reject(err) : resolve());
+		});
+		if (!await UserRepository.getInstance().updateSessionId(user.id, req.sessionID, user.passwordHash)) {
+			res.status(503).json({error: "Unable to establish session."});
+			return;
+		}
 
 		req.session.userId = user.id;
 		req.session.isAdmin = user.isAdmin;
+		(req.session as SessionData).lastActivity = Date.now();
+		await new Promise<void>((resolve, reject) => {
+			req.session.save(err => err ? reject(err) : resolve());
+		});
 
 		try {
 			// await UserLoginRepository.getInstance().insert(user.id, getIpAddress(req), req.get("User-Agent") || "unknown");
@@ -75,6 +86,8 @@ export async function logout(req: Request, res: Response): Promise<void> {
 	const userId = req.session.userId;
 
 	try {
+		// A late save from an in-flight request must not resurrect this logged-out session.
+		await UserRepository.getInstance().invalidateSession(userId, req.sessionID);
 		await new Promise<void>((resolve, reject) => {
 			req.session.destroy((err) => {
 				if (err) reject(err);
@@ -82,7 +95,7 @@ export async function logout(req: Request, res: Response): Promise<void> {
 			});
 		});
 
-		res.clearCookie(req.sessionID ? "connect.sid" : "session");
+		res.clearCookie("connect.sid");
 		logger.info(`User ${userId} logged out successfully.`);
 
 		res.status(200).json({success: true});
@@ -93,15 +106,21 @@ export async function logout(req: Request, res: Response): Promise<void> {
 }
 
 export async function currentUser(req: Request, res: Response): Promise<void> {
+	res.setHeader("Cache-Control", "private, no-store");
+	res.vary("Cookie");
 	if (!req.session?.userId) {
 		res.status(401).json({authenticated: false});
 		return;
 	}
 
-	const {userId, isAdmin} = req.session!;
-	res.json({
-		authenticated: true,
-		userId,
-		isAdmin
-	});
+	try {
+		const userId = req.session.userId;
+		const current = await UserRepository.getInstance().currentIdentity(userId, req.sessionID);
+		if (!current) {
+			res.status(401).json({authenticated: false}); return;
+		}
+		res.json({authenticated: true, userId, isAdmin: current.isAdmin, userManagementEnabled: process.env.ADMIN_USERS_ENABLED === "1"});
+	} catch {
+		res.status(503).json({code: "SESSION_VALIDATION_UNAVAILABLE"});
+	}
 }

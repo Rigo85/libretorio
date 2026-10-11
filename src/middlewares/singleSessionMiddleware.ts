@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { UserRepository } from "(src)/repositories/UserRepository";
 import { Logger } from "(src)/helpers/Logger";
+import { sessionUnauthorizedResponse } from "./sessionUnauthorizedResponse";
 
 const logger = new Logger("SingleSession Middleware");
 
@@ -20,14 +21,14 @@ export async function singleSessionMiddleware(req: Request, res: Response, next:
 					else resolve();
 				});
 			});
-			// res.status(401).json({error: "Session has been invalidated by a login from another device."});
-			res.redirect("/auth/login");
+			sessionUnauthorizedResponse(req, res, "Session has been invalidated by a login from another device.", "SESSION_INVALIDATED");
 			return;
 		}
 
 		next();
 	} catch (error) {
 		logger.error("Error in session validation:", error);
+		res.setHeader("Cache-Control", "private, no-store");
 		res.status(503).json({error: "Service temporarily unavailable."});
 		return;
 	}

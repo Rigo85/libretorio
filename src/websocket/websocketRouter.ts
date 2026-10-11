@@ -1,3 +1,4 @@
+import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { WebSocket } from "ws";
 import fs from "fs-extra";
 
@@ -8,23 +9,20 @@ import { AudioFilesService } from "(src)/services/AudioFilesService";
 import { ConversionService } from "(src)/services/ConversionService";
 import { ComicCacheReaderService } from "(src)/services/ComicCacheReaderService";
 import { CacheArtifactStateRepository } from "(src)/repositories/CacheArtifactStateRepository";
-import { isPathWithinRoot } from "(src)/utils/filesystemUtils";
+import { isRealPathWithinRoot } from "(src)/utils/filesystemUtils";
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
-import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { ExtendedWebSocket, WebsocketAction } from "(src)/models/interfaces/WebSocketTypes";
 import { AuditLogsService } from "(src)/services/AuditLogsService";
-import { UserRepository } from "(src)/repositories/UserRepository";
+import { validateSession } from "./validateSession";
+import path from "path";
 import { config } from "(src)/config/configuration";
 
 const logger = new Logger("Book Service");
-const SESSION_CACHE_TTL_MS = 30_000;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function validateFilePath(filePath: unknown): filePath is string {
-	if (!filePath || typeof filePath !== "string") return false;
-	const root = config.production.paths.booksRoot;
-	if (!root) return true; // no root configured — skip validation
-	return isPathWithinRoot(filePath, root);
+async function validateFilePath(filePath: unknown): Promise<boolean> {
+	if (typeof filePath !== "string" || !path.isAbsolute(filePath)) return false;
+	return isRealPathWithinRoot(filePath, config.production.paths.booksRoot || path.join(config.production.paths.public, "books"));
 }
 
 function sanitizePaginationInt(value: unknown, defaultVal: number, min: number, max: number): number {
@@ -34,44 +32,25 @@ function sanitizePaginationInt(value: unknown, defaultVal: number, min: number, 
 }
 
 export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
+	if (!await validateSession(ws)) return;
 	const {userId} = ws.session;
-
-	const now = Date.now();
-	const cacheValid = ws.cachedSessionId !== undefined && ws.sessionCacheExpiry !== undefined && now < ws.sessionCacheExpiry;
-
-	if (!cacheValid) {
-		try {
-			const storedSessionId = await UserRepository.getInstance().getSessionId(userId);
-			ws.cachedSessionId = storedSessionId;
-			ws.sessionCacheExpiry = now + SESSION_CACHE_TTL_MS;
-		} catch (error) {
-			logger.error("Error verifying WebSocket session:", error);
-		}
-	}
-
-	if (ws.cachedSessionId !== undefined && ws.cachedSessionId !== (ws.session as any)?.req.sessionID) {
-		logger.info(`Terminating WebSocket connection for user '${userId}' due to session change.`);
-
-		sendMessage(ws, {
-			event: "session_expired",
-			data: {message: "Your session has been invalidated by a login on another device."}
-		});
-
-		ws.terminate();
-		return;
-	}
 
 	let messageObj: { event: string; data: any };
 	let event: WebsocketAction = "default";
 
 	try {
 		messageObj = JSON.parse(message);
+		if (!messageObj || typeof messageObj.event !== "string" || messageObj.event.length > 64) {
+			throw new Error("Invalid event envelope");
+		}
 		event = messageObj.event as WebsocketAction;
 		if (event !== "ping") {
+			ws.lastActivityTime = Date.now();
 			AuditLogsService.getInstance().logAction(userId, event, messageObj);
 		}
 	} catch (error) {
-		logger.error("onMessageEvent", error);
+		sendMessage(ws, {event: "errors", data: {errors: ["Invalid message."]}});
+		return;
 	}
 
 	const eventHandlers: Record<WebsocketAction, () => Promise<void>> = {
@@ -79,6 +58,10 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 			await onListEvent(ws, messageObj);
 		},
 		"search": async () => {
+			if (!ws.session.isAdmin) {
+				sendMessage(ws, {event: "search_details", data: []});
+				return;
+			}
 			await onSearchEvent(ws, messageObj);
 		},
 		// eslint-disable-next-line @typescript-eslint/naming-convention
@@ -119,11 +102,11 @@ export async function onMessageEvent(message: any, ws: ExtendedWebSocket) {
 		}
 	};
 
-	if (!eventHandlers[event]) {
+	if (!Object.prototype.hasOwnProperty.call(eventHandlers, event)) {
 		event = "default";
 	}
 
-	eventHandlers[event]().catch(e => logger.error("Unhandled event error:", e));
+	await eventHandlers[event]().catch(e => logger.error("Unhandled event error:", e));
 }
 
 async function onListEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
@@ -153,7 +136,7 @@ async function onGetAudioBookEvent(ws: WebSocket, messageObj: { event: string; d
 	try {
 		const filePath = messageObj?.data?.filePath;
 
-		if (!validateFilePath(filePath)) {
+		if (!await validateFilePath(filePath)) {
 			sendMessage(ws, {event: "get_audio_book", data: []});
 			logger.error(`onGetAudioBookEvent: invalid or disallowed path "${filePath}"`);
 			return;
@@ -200,7 +183,7 @@ async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; d
 	try {
 		const filePath = messageObj.data?.filePath;
 
-		if (!validateFilePath(filePath)) {
+		if (!await validateFilePath(filePath)) {
 			sendMessage(ws, {event: "convert_to_pdf", data: {success: "ERROR", error: "Invalid file path."}});
 			logger.error(`onConvertToPdfEvent: invalid or disallowed path "${filePath}"`);
 			return;

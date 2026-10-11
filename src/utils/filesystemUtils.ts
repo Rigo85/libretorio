@@ -153,3 +153,12 @@ export function isPathWithinRoot(filePath: string, root: string): boolean {
 	const resolvedRoot = path.resolve(root);
 	return resolved === resolvedRoot || resolved.startsWith(resolvedRoot + path.sep);
 }
+
+export async function isRealPathWithinRoot(filePath: string, root: string): Promise<boolean> {
+	try {
+		const [target, boundary] = await Promise.all([fs.realpath(filePath), fs.realpath(root)]);
+		return isPathWithinRoot(target, boundary);
+	} catch {
+		return false;
+	}
+}

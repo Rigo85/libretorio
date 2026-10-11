@@ -7,7 +7,9 @@ export function getWebDetailsCoverId(file: File): string | number | undefined {
 	try {
 		const webDetails = JSON.parse(file.webDetails ?? "{}");
 
-		return webDetails.cover_i;
+		const coverId = webDetails.cover_i;
+		return (typeof coverId === "number" || typeof coverId === "string") && /^[1-9][0-9]*$/.test(String(coverId))
+			? coverId : undefined;
 	} catch (error) {
 		logger.error("getWebDetailsCoverId", error);
 

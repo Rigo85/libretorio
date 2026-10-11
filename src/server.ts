@@ -54,6 +54,12 @@ async function fullServerStart() {
 		app.use(errorHandler());
 	} else {
 		app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+			if (err.code === "EBADCSRFTOKEN") {
+				logger.info("CSRF validation failed", {method: req.method, path: req.path});
+				res.setHeader("Cache-Control", "private, no-store");
+				res.status(403).json({error: "Invalid or expired CSRF token.", code: "EBADCSRFTOKEN"});
+				return;
+			}
 			if (err.status === 404) {
 				res.status(404).end();
 				return;
