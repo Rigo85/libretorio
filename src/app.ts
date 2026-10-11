@@ -23,6 +23,7 @@ import { appStaticMiddleware } from "(src)/middlewares/appStaticMiddleware";
 import { sessionActivity } from "(src)/controllers/sessionActivity";
 import { readingRouter } from "(src)/controllers/reading";
 import { usersRouter } from "(src)/controllers/users";
+import { catalogueSearchRouter } from "(src)/controllers/catalogueSearch";
 
 export async function bootstrap(): Promise<{ app: express.Express; sessionParser: any }> {
 	const logger = new Logger("App");
@@ -138,6 +139,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.post("/api/login", loginLimiter, login);
 	app.post("/api/logout", logout);
 	app.get("/api/me", currentUser);
+	app.use("/api/catalogue/search", catalogueSearchRouter());
 	app.post("/api/session/activity", sessionActivity);
 	if (process.env.ADMIN_USERS_ENABLED === "1") {
 		app.use("/api/admin/users", usersRouter());
