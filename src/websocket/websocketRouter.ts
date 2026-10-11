@@ -16,6 +16,8 @@ import { validateSession } from "./validateSession";
 import { FileRepository } from "(src)/repositories/FileRepository";
 import path from "path";
 import { config } from "(src)/config/configuration";
+import { comicReadingPage } from "(src)/services/ComicReadingService";
+import { ReadingError } from "(src)/services/ReadingSource";
 
 const logger = new Logger("Book Service");
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -246,6 +248,18 @@ async function onDecompressEvent(ws: WebSocket, messageObj: { event: string; dat
 }
 
 async function onGetMorePagesEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
+	if (messageObj?.data?.requestId !== undefined) {
+		const {requestId, archiveId, id} = messageObj.data;
+		if (typeof requestId !== "string" || !UUID_REGEX.test(requestId)) return;
+		try {
+			const result = await comicReadingPage(messageObj.data);
+			sendMessage(ws, {event: "decompress", data: {...result, requestId, archiveId, id}});
+		} catch (error) {
+			sendMessage(ws, {event: "decompress", data: {success: "ERROR", requestId, archiveId, id,
+				code: error instanceof ReadingError ? error.code : "COMIC_UNAVAILABLE"}});
+		}
+		return;
+	}
 	try {
 		const id: unknown = messageObj?.data?.id;
 		const index = sanitizePaginationInt(messageObj?.data?.index, 0, 0, 9999);

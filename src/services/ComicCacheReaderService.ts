@@ -3,6 +3,7 @@ import fs from "fs-extra";
 
 import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { Logger } from "(src)/helpers/Logger";
+import { config } from "(src)/config/configuration";
 
 const logger = new Logger("ComicCacheReaderService");
 
@@ -39,7 +40,7 @@ export class ComicCacheReaderService {
 				return {error: "The Comic/Manga cache index has not been provided.", success: "ERROR"};
 			}
 
-			const cachePath = path.join(__dirname, "..", "public", "cache", id);
+			const cachePath = path.join(config.production.paths.cache, id);
 			const cacheFilePath = path.join(cachePath, `${id}_${index}.cache`);
 
 			if (!await fs.pathExists(cacheFilePath)) {

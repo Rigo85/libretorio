@@ -21,6 +21,7 @@ import { lastActivityMiddleware } from "(src)/middlewares/lastActivityMiddleware
 import { libraryFilesMiddleware } from "(src)/middlewares/libraryFilesMiddleware";
 import { appStaticMiddleware } from "(src)/middlewares/appStaticMiddleware";
 import { sessionActivity } from "(src)/controllers/sessionActivity";
+import { readingRouter } from "(src)/controllers/reading";
 
 export async function bootstrap(): Promise<{ app: express.Express; sessionParser: any }> {
 	const logger = new Logger("App");
@@ -92,6 +93,7 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 			prefix: "rate-limit:"
 		}),
 		skip: (req) =>
+			(process.env.READING_ENABLED === "1" && !!req.session?.userId && req.path.startsWith("/api/reading/")) ||
 			["GET", "HEAD"].includes(req.method) ||
 			/^\/(covers|assets)\//.test(req.path)
 	});
@@ -136,6 +138,10 @@ export async function bootstrap(): Promise<{ app: express.Express; sessionParser
 	app.post("/api/logout", logout);
 	app.get("/api/me", currentUser);
 	app.post("/api/session/activity", sessionActivity);
+	if (process.env.READING_ENABLED === "1") app.use("/api/reading", readingRouter());
+	else app.use("/api/reading", (_req, res) => {
+		res.status(404).json({code: "READING_DISABLED"});
+	});
 
 	app.get("/*", (_req, res) => {
 		res.setHeader("Cache-Control", "no-cache");
