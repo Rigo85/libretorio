@@ -1,6 +1,7 @@
 export interface ConvertToPdfResponse {
 	success: "OK" | "ERROR";
 	error?: string;
+	code?: string;
 	pdfPath?: string;
 }
 
@@ -10,4 +11,3 @@ export interface ConvertData {
 }
 
 export type ConventToPdfUtilFunction = (filePath: string, coverId: string) => Promise<void>;
-

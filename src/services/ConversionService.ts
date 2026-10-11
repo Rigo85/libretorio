@@ -1,17 +1,16 @@
 import path from "path";
 import fs from "fs-extra";
-import { execFile } from "child_process";
-import util from "util";
 import { Logger } from "(src)/helpers/Logger";
-import { ConventToPdfUtilFunction, ConvertData, ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
+import { ConvertData, ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
+import { PostgresAdapter } from "(src)/db/PostgresAdapter";
+import { config } from "(src)/config/configuration";
+import { isRealPathWithinRoot } from "(src)/utils/filesystemUtils";
 
-const execFilePromise = util.promisify(execFile);
 const logger = new Logger("ConversionService");
 
-interface ExecConfig {
-	bin: string;
-	args: string[];
-	env?: NodeJS.ProcessEnv;
+function validData(data: ConvertData): boolean {
+	return typeof data?.filePath === "string" && path.isAbsolute(data.filePath) &&
+		typeof data.id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.id);
 }
 
 export class ConversionService {
@@ -27,94 +26,40 @@ export class ConversionService {
 		return ConversionService.instance;
 	}
 
-	public async convertWithCalibreToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertWithCalibreToPdf: '${JSON.stringify({id: data.id})}'`);
-
-		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
-		const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
-		const calibrePath = path.join(__dirname, "calibre", "ebook-convert");
-
-		return await this.convertToPdf(data, {bin: calibrePath, args: [data.filePath, pdfPath]});
-	}
-
-	async convertOfficeToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertOfficeToPdf: '${JSON.stringify({id: data.id})}'`);
-
-		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
-		const utilFun = async (_filePath: string, _id: string) => {
-			const pdfFile = path.join(pdfDirPath, `${data.id}.pdf`);
-			const outputPdfFile = path.join(pdfDirPath, `${path.basename(data.filePath, path.extname(data.filePath))}.pdf`);
-			fs.renameSync(outputPdfFile, pdfFile);
-		};
-
-		const execConfig: ExecConfig = {
-			bin: "libreoffice",
-			args: ["--headless", "--convert-to", "pdf", "--outdir", pdfDirPath, data.filePath],
-			// eslint-disable-next-line @typescript-eslint/naming-convention
-			env: {...process.env, LD_LIBRARY_PATH: "/usr/lib/libreoffice/program/"}
-		};
-
-		return await this.convertToPdf(data, execConfig, utilFun);
-	}
-
-	async convertHtmlToPdf(data: { filePath: string; id: string }): Promise<ConvertToPdfResponse> {
-		logger.info(`convertHtmlToPdf: '${JSON.stringify({id: data.id})}'`);
-
-		const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
-		const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
-
-		return await this.convertToPdf(data, {bin: "htmldoc", args: ["--webpage", "--quiet", "-f", pdfPath, data.filePath]});
-	}
-
-	async convertToPdf(data: ConvertData, execConfig: ExecConfig, utilFun?: ConventToPdfUtilFunction): Promise<ConvertToPdfResponse> {
-		logger.info(`convertToPdf: '${JSON.stringify({id: data.id})}'`);
-
+	public async getPreparedPdf(data: ConvertData): Promise<ConvertToPdfResponse> {
+		const unavailable = (code: string, error: string): ConvertToPdfResponse => ({success: "ERROR", code, error});
+		if (!validData(data)) return unavailable("PDF_INVALID_REQUEST", "Invalid conversion parameters.");
 		try {
-			if (!data?.filePath) {
-				logger.info("The path to the file has not been provided.");
-				return {error: "The path to the file has not been provided.", success: "ERROR"};
+			const root = config.production.paths.booksRoot || path.join(config.production.paths.public, "books");
+			if (!await isRealPathWithinRoot(data.filePath, root)) return unavailable("PDF_SOURCE_MISSING", "The source is no longer available.");
+			const {rows} = await PostgresAdapter.getInstance().pool.query(
+				`SELECT a.name,a."parentPath",a."fileKind",c.status,c.details
+                FROM archive a LEFT JOIN document_conversions c ON c.archive_id=a.id
+                WHERE a."coverId"=$1 LIMIT 1`, [data.id]);
+			const row = rows[0];
+			if (!row || await fs.realpath(path.join(row.parentPath, row.name)) !== await fs.realpath(data.filePath)) {
+				return unavailable("PDF_INVALID_REQUEST", "File does not match the catalogue ID.");
 			}
-
-			if (!fs.existsSync(data.filePath)) {
-				logger.info(`The file does not exist: "${data.filePath}"`);
-				return {error: "The file does not exist.", success: "ERROR"};
+			const source = await fs.stat(data.filePath);
+			const formats = ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "rtf", "txt", "md", "html", "htm", "lit"];
+			if (!(row.fileKind === "FILE" && source.isFile() && formats.includes(path.extname(row.name).slice(1).toLowerCase()))) {
+				return unavailable("PDF_UNSUPPORTED", "This material has no PDF conversion.");
 			}
-
-			const pdfDirPath = path.join(__dirname, "..", "public", "cache", data.id);
-			const pdfPath = path.join(pdfDirPath, `${data.id}.pdf`);
-
-			if (fs.existsSync(pdfPath)) {
-				return {pdfPath: path.join("/cache", data.id, `${data.id}.pdf`), success: "OK"};
-			} else {
-				fs.mkdirSync(pdfDirPath, {recursive: true});
-
-				const {stderr} = await execFilePromise(execConfig.bin, execConfig.args, {env: execConfig.env});
-				if (stderr) {
-					logger.error(`convertToPdf stderr: ${stderr}`);
-				}
-
-				if (utilFun) {
-					await utilFun(data.filePath, data.id);
-				}
-
-				if (fs.existsSync(pdfPath)) {
-					const stats = fs.statSync(pdfPath);
-					if (stats.size > 0) {
-						logger.info(`PDF file created successfully: '${pdfPath}'`);
-						return {pdfPath: path.join("/cache", data.id, `${data.id}.pdf`), success: "OK"};
-					} else {
-						logger.error(`PDF file is empty: '${pdfPath}'`);
-						return {error: "An error has occurred converting to pdf.", success: "ERROR"};
-					}
-				} else {
-					logger.error(`PDF file not found after conversion: '${pdfPath}'`);
-					return {error: "An error has occurred converting to pdf.", success: "ERROR"};
-				}
+			if (row.status === "failed") return unavailable("PDF_FAILED", "El scanner no pudo preparar el PDF. Se requiere revisar el fallo registrado.");
+			if (row.status !== "ready") return unavailable("PDF_PENDING", "El PDF aun no esta preparado por el scanner. Intenta de nuevo despues del escaneo.");
+			const cache = await fs.realpath(config.production.paths.cache);
+			const directory = path.join(cache, data.id);
+			if (await fs.realpath(directory) !== directory) return unavailable("PDF_UNAVAILABLE", "PDF cache is not available.");
+			const pdf = path.join(directory, `${data.id}.pdf`);
+			const info = await fs.lstat(pdf, {bigint: true});
+			const signature = [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String).join(":");
+			if (!info.isFile() || info.size < 1n || signature !== row.details?.outputSignature) {
+				return unavailable("PDF_STALE", "El PDF necesita ser regenerado por el scanner.");
 			}
+			return {success: "OK", pdfPath: `/cache/${data.id}/${data.id}.pdf`};
 		} catch (error) {
-			logger.error("convertToPdf", error);
-
-			return {success: "ERROR", error: "An error has occurred converting to pdf."};
+			logger.error("getPreparedPdf", {id: data.id, error: error.message});
+			return unavailable("PDF_UNAVAILABLE", "El PDF no esta disponible. No se inicia una conversion desde el lector.");
 		}
 	}
 }

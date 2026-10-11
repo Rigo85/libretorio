@@ -1,6 +1,7 @@
 import { Logger } from "(src)/helpers/Logger";
 import { PostgresAdapter } from "(src)/db/PostgresAdapter";
 import { File } from "(src)/models/interfaces/File";
+import path from "path";
 
 const logger = new Logger("FileRepository");
 
@@ -15,6 +16,13 @@ export class FileRepository {
 			FileRepository.instance = new FileRepository();
 		}
 		return FileRepository.instance;
+	}
+
+	public async findPathByCoverId(coverId: string): Promise<string | undefined> {
+		const {rows} = await PostgresAdapter.getInstance().pool.query(
+			"SELECT name, \"parentPath\" FROM archive WHERE \"coverId\" = $1 LIMIT 1", [coverId]
+		);
+		return rows[0] ? path.join(rows[0].parentPath, rows[0].name) : undefined;
 	}
 
 	public async update(file: File): Promise<boolean> {

@@ -1,4 +1,3 @@
-import { ConvertToPdfResponse } from "(src)/models/interfaces/ConversionTypes";
 import { WebSocket } from "ws";
 import fs from "fs-extra";
 
@@ -14,6 +13,7 @@ import { DecompressResponse } from "(src)/models/interfaces/DecompressTypes";
 import { ExtendedWebSocket, WebsocketAction } from "(src)/models/interfaces/WebSocketTypes";
 import { AuditLogsService } from "(src)/services/AuditLogsService";
 import { validateSession } from "./validateSession";
+import { FileRepository } from "(src)/repositories/FileRepository";
 import path from "path";
 import { config } from "(src)/config/configuration";
 
@@ -184,47 +184,29 @@ async function onUpdateEvent(ws: WebSocket, messageObj: { event: string; data: a
 }
 
 async function onConvertToPdfEvent(ws: WebSocket, messageObj: { event: string; data: any }) {
+	const requestId = typeof messageObj.data?.requestId === "string" && /^[a-zA-Z0-9-]{1,64}$/.test(messageObj.data.requestId)
+		? messageObj.data.requestId : undefined;
+	const reply = (data: object) => sendMessage(ws, {event: "convert_to_pdf", data: {...data, requestId}});
 	try {
 		const filePath = messageObj.data?.filePath;
 
-		if (!await validateFilePath(filePath)) {
-			sendMessage(ws, {event: "convert_to_pdf", data: {success: "ERROR", error: "Invalid file path."}});
+		const id = messageObj.data?.id;
+		if (typeof id !== "string" || !UUID_REGEX.test(id) || !await validateFilePath(filePath)) {
+			reply({success: "ERROR", error: "Invalid file path."});
 			logger.error(`onConvertToPdfEvent: invalid or disallowed path "${filePath}"`);
 			return;
 		}
 
-		const extension = filePath.split(".").pop() ?? "";
-		const dispatch: Record<string, (data: { filePath: string }) => Promise<ConvertToPdfResponse>> = {
-			"epub": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
-			"doc": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"docx": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"ppt": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"pptx": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"xls": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"xlsx": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"rtf": ConversionService.getInstance().convertOfficeToPdf.bind(ConversionService.getInstance()),
-			"txt": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
-			"md": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance()),
-			"html": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
-			"htm": ConversionService.getInstance().convertHtmlToPdf.bind(ConversionService.getInstance()),
-			"lit": ConversionService.getInstance().convertWithCalibreToPdf.bind(ConversionService.getInstance())
-		};
-
-		if (dispatch[extension]) {
-			const response = await dispatch[extension](messageObj.data);
-			sendMessage(ws, {event: "convert_to_pdf", data: {...response}});
-		} else {
-			sendMessage(ws, {
-				event: "convert_to_pdf",
-				data: {success: "ERROR", error: "An error has occurred. Invalid file extension kind."}
-			});
+		const cataloguedPath = await FileRepository.getInstance().findPathByCoverId(id);
+		if (!cataloguedPath || await fs.realpath(cataloguedPath) !== await fs.realpath(filePath)) {
+			reply({success: "ERROR", error: "File does not match the catalogue ID."});
+			return;
 		}
+		const response = await ConversionService.getInstance().getPreparedPdf({filePath, id});
+		reply(response);
 	} catch (error) {
 		logger.error("onConvertToPdfEvent", error);
-		sendMessage(ws, {
-			event: "convert_to_pdf",
-			data: {success: "ERROR", error: "An error has occurred."}
-		});
+		reply({success: "ERROR", error: "An error has occurred."});
 	}
 }
 
