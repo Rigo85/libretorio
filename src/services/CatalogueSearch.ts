@@ -6,7 +6,7 @@ export class SearchError extends Error {
 	}
 }
 export const searchFields = ["q", "title", "author", "isbn", "description", "language", "folder", "kind", "sort", "subfolders"] as const;
-export type SearchFilter = Record<typeof searchFields[number], string>;
+export type SearchFilter = Record<typeof searchFields[number], string> & {material?: string};
 export function fold(value: string): string {
 	return value.normalize("NFC").toLowerCase().replace(/[áàäâãå]/g, "a").replace(/[éèëê]/g, "e")
 		.replace(/[íìïî]/g, "i").replace(/[óòöôõ]/g, "o").replace(/[úùüû]/g, "u").replace(/\s+/g, " ").trim();
@@ -28,6 +28,10 @@ export function filters(query: Record<string, unknown>): SearchFilter {
 		if (typeof raw !== "string" || raw.length > (name === "folder" ? 2048 : 256) || /[\x00-\x1f]/.test(raw)) throw new SearchError(400, "INVALID_SEARCH");
 		value[name] = raw.trim().normalize("NFC");
 	}
+	const material = query.material ?? "";
+	if (typeof material !== "string" || !["", "pdf", "epub", "audio", "comic"].includes(material)) throw new SearchError(400, "INVALID_SEARCH");
+	// Omit the empty field to preserve signatures of existing pagination links.
+	if (material) value.material = material;
 	value.sort = value.sort || "relevance"; value.subfolders = value.subfolders || "1";
 	if (!["relevance", "title", "added"].includes(value.sort) || !["0", "1"].includes(value.subfolders) ||
     !["", "FILE", "EPUB", "AUDIOBOOK", "COMIC-MANGA", "NONE"].includes(value.kind)) throw new SearchError(400, "INVALID_SEARCH");
@@ -35,7 +39,7 @@ export function filters(query: Record<string, unknown>): SearchFilter {
 	value.folder = value.folder.replace(/\/+$/, "");
 	if (value.isbn && (!/^[0-9Xx -]+$/.test(value.isbn) || !/[0-9]/.test(value.isbn))) throw new SearchError(400, "INVALID_ISBN");
 	for (const field of ["q", "title", "author", "description"] as const)terms(value[field]);
-	if (!searchFields.some(key=>!["sort", "subfolders"].includes(key) && !!value[key])) throw new SearchError(400, "EMPTY_SEARCH");
+	if (!value.material && !searchFields.some(key=>!["sort", "subfolders"].includes(key) && !!value[key])) throw new SearchError(400, "EMPTY_SEARCH");
 	return value;
 }
 const signature = (filter: SearchFilter)=>createHash("sha256").update(JSON.stringify(filter)).digest("hex");
@@ -57,7 +61,7 @@ function pattern(value: string): string {
 	const vowels: Record<string, string> = {a:"[aáàäâãå]", e:"[eéèëê]", i:"[iíìïî]", o:"[oóòöôõ]", u:"[uúùüû]"};
 	return Array.from(fold(value)).map(char=>char === " " ? "[[:space:]]+" : vowels[char] ?? char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("");
 }
-// No extension inference or JSON key search. Manual metadata replaces extracted metadata.
+// Text matching uses visible metadata, never JSON key names.
 const sqlFold = (value: string)=>`regexp_replace(translate(lower(normalize(coalesce(${value},''),NFC)),'áàäâãåéèëêíìïîóòöôõúùüû','aaaaaaeeeeiiiiooooouuuu'),'[[:space:]]+',' ','g')`;
 export function searchQuery(filter: SearchFilter, cursor?: {key: string; id: number}, previous = false): {text: string; values: any[]} {
 	const values: any[] = []; const arg = (value: any)=>{
@@ -76,6 +80,16 @@ export function searchQuery(filter: SearchFilter, cursor?: {key: string; id: num
 	if (filter.isbn)where.push(`regexp_replace(isbn,'[^0-9Xx]','','g') LIKE ${arg("%" + literal(filter.isbn.replace(/[^0-9Xx]/g, "")) + "%")}`);
 	if (filter.language)where.push(match("language", filter.language));
 	if (filter.kind)where.push(`"fileKind"=${arg(filter.kind)}`);
+	if (filter.material){
+		const formats: Record<string, {extension: string; directory?: string}> = {
+			pdf:{extension:"[.]pdf$"}, epub:{extension:"[.]epub$", directory:"EPUB"},
+			audio:{extension:"[.](mp3|wav|m4a|m4b|ogg|flac)$", directory:"AUDIOBOOK"},
+			comic:{extension:"[.](cbr|cbz|cb7|cbt)$", directory:"COMIC-MANGA"}
+		};
+		const format = formats[filter.material];
+		const file = `("fileKind"='FILE' AND name ~* ${arg(format.extension)})`;
+		where.push(format.directory ? `(${file} OR "fileKind"=${arg(format.directory)})` : file);
+	}
 	if (filter.folder){
 		const path = arg(filter.folder); where.push(filter.subfolders === "1" ? `("parentPath"=${path} OR "parentPath" LIKE ${arg(literal(filter.folder) + "/%")} ESCAPE E'\\\\')` : `"parentPath"=${path}`);
 	}
