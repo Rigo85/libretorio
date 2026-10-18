@@ -35,14 +35,17 @@ export function filters(query: Record<string, unknown>): SearchFilter {
 	value.sort = value.sort || "relevance"; value.subfolders = value.subfolders || "1";
 	if (!["relevance", "title", "added"].includes(value.sort) || !["0", "1"].includes(value.subfolders) ||
     !["", "FILE", "EPUB", "AUDIOBOOK", "COMIC-MANGA", "NONE"].includes(value.kind)) throw new SearchError(400, "INVALID_SEARCH");
-	if (value.folder && (!value.folder.startsWith("/") || value.folder.split("/").includes(".."))) throw new SearchError(400, "INVALID_FOLDER");
-	value.folder = value.folder.replace(/\/+$/, "");
+	if (value.folder){
+		value.folder = value.folder.replace(/\/+$/, "");
+		if (!value.folder || value.folder.split("/").some(part=>part === "." || part === "..")) throw new SearchError(400, "INVALID_FOLDER");
+	}
 	if (value.isbn && (!/^[0-9Xx -]+$/.test(value.isbn) || !/[0-9]/.test(value.isbn))) throw new SearchError(400, "INVALID_ISBN");
 	for (const field of ["q", "title", "author", "description"] as const)terms(value[field]);
 	if (!value.material && !searchFields.some(key=>!["sort", "subfolders"].includes(key) && !!value[key])) throw new SearchError(400, "EMPTY_SEARCH");
 	return value;
 }
-const signature = (filter: SearchFilter)=>createHash("sha256").update(JSON.stringify(filter)).digest("hex");
+// Only folder searches change semantics; cursors for other searches remain compatible.
+const signature = (filter: SearchFilter)=>createHash("sha256").update(JSON.stringify(filter) + (filter.folder ? ":folder-fragment-v1" : "")).digest("hex");
 export function decodeCursor(raw: unknown, filter: SearchFilter): {key: string; id: number} | undefined {
 	if (raw === undefined) return undefined;
 	try {
@@ -91,22 +94,31 @@ export function searchQuery(filter: SearchFilter, cursor?: {key: string; id: num
 		where.push(format.directory ? `(${file} OR "fileKind"=${arg(format.directory)})` : file);
 	}
 	if (filter.folder){
-		const path = arg(filter.folder); where.push(filter.subfolders === "1" ? `("parentPath"=${path} OR "parentPath" LIKE ${arg(literal(filter.folder) + "/%")} ESCAPE E'\\\\')` : `"parentPath"=${path}`);
+		const normalized = `normalize(library_folder,NFC) ~* ${arg(pattern(filter.folder) + (filter.subfolders === "0" ? "[^/]*$" : ""))}`;
+		// Most paths already have matching accents. Avoid Unicode normalization for those rows.
+		where.push(filter.subfolders === "1" ? `(strpos(library_folder,${arg(filter.folder)})>0 OR ${normalized})` : normalized);
 	}
+	// Derive a public directory from the registered root, never match the server prefix.
+	const folderColumn = filter.folder ? `,
+      (CASE WHEN root.path LIKE '/%' THEN CASE
+        WHEN "parentPath"=rtrim(root.path,'/') THEN '/books'
+        WHEN starts_with("parentPath",rtrim(root.path,'/')||'/')
+          THEN '/books'||substr("parentPath",length(rtrim(root.path,'/'))+1)
+      END END || CASE WHEN "fileKind" IN ('AUDIOBOOK','COMIC-MANGA','EPUB') THEN '/'||name ELSE '' END) AS library_folder` : "";
 	const q = filter.sort === "relevance" ? fold(terms(filter.q).join(" ")) : "";
 	const rank = q ? `CASE WHEN ${sqlFold("title")}=${arg(q)} THEN '0' WHEN ${sqlFold("title")} LIKE ${arg(literal(q) + "%")} ESCAPE E'\\\\' THEN '1' WHEN ${match("title", q)} THEN '2' ELSE '3' END` : "'0'";
 	const key = filter.sort === "added" ? "to_char(\"createdAt\" AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US')" : filter.sort === "title" ? `left(${sqlFold("title")},512)` : `${rank}||left(${sqlFold("title")},512)`;
 	const descending = filter.sort === "added", direction = descending !== previous ? "DESC" : "ASC";
 	const seek = cursor ? `WHERE (key COLLATE "C",id) ${descending !== previous ? "<" : ">"} (${arg(cursor.key)} COLLATE "C",${arg(cursor.id)})` : "";
 	return {values, text:`WITH fields AS NOT MATERIALIZED (
-    SELECT id,name,"parentPath","parentHash","coverId","fileKind","createdAt","customDetails","localDetails","webDetails",
+    SELECT a.id,name,"parentPath","parentHash","coverId","fileKind","createdAt","customDetails","localDetails","webDetails",
       coalesce(nullif(CASE WHEN "customDetails" THEN "webDetails"->>'title' ELSE coalesce("localDetails"->>'title',"webDetails"->>'title') END,''),name) AS title,
       concat_ws(' ',CASE WHEN NOT coalesce("customDetails",false) THEN "localDetails"->>'author(s)' END,"webDetails"->>'author_name') AS author,
       concat_ws(' ',CASE WHEN NOT coalesce("customDetails",false) THEN coalesce("localDetails"->>'comments',"localDetails"->>'description') END,"webDetails"->>'description') AS description,
       concat_ws(' ',CASE WHEN NOT coalesce("customDetails",false) THEN "localDetails"->>'identifiers' END,"webDetails"->>'isbn') AS isbn,
       concat_ws(' ',CASE WHEN NOT coalesce("customDetails",false) THEN coalesce("localDetails"->>'languages',"localDetails"->>'language') END,"webDetails"->>'language') AS language,
-      CASE WHEN "customDetails" THEN coalesce("webDetails"->>'cover_i',"coverId") ELSE "coverId" END AS cover
-    FROM archive
+      CASE WHEN "customDetails" THEN coalesce("webDetails"->>'cover_i',"coverId") ELSE "coverId" END AS cover${folderColumn}
+    FROM archive a${filter.folder ? " JOIN scan_root root ON root.id=a.scan_root_id" : ""}
   ), ranked AS (SELECT id,${key} AS key FROM fields WHERE ${where.join(" AND ") || "TRUE"}),
   page AS (SELECT id,key FROM ranked ${seek} ORDER BY key COLLATE "C" ${direction},id ${direction} LIMIT 51)
   SELECT page.id,page.key,left(f.title,512) AS title,left(f.author,512) AS author,
